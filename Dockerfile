@@ -1,5 +1,5 @@
 # Use CUDA base for GPU, or python:3.10 if CPU only
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
+FROM python:3.10-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
