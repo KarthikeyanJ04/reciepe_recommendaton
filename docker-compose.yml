@@ -1,24 +1,15 @@
-version: '3.8'
-
+version: '3.9'
 services:
-  recipe-recommender:
+  backend:
     build: .
-    container_name: whatcanicook
+    image: recipe-ai
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
-      # Mount models directory (so you don't rebuild when model updates)
-      - ./models:/app/models:ro
-      # Mount static/templates for development (optional)
-      - ./static:/app/static:ro
-      - ./templates:/app/templates:ro
-    environment:
-      - FLASK_ENV=production
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - ./models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

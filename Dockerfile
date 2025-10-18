@@ -1,36 +1,20 @@
-FROM python:3.11-slim
+# Use CUDA base for GPU, or python:3.10 if CPU only
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
 
-# Set working directory
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System dependencies
+RUN apt-get update && apt-get install -y python3 python3-pip git && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
 WORKDIR /app
+COPY requirements.txt ./
+RUN python3 -m pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Copy all code (src/, app.py, etc.)
+COPY . /app
 
-# Copy requirements first (for caching)
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-COPY . .
-
-# Create models directory
-RUN mkdir -p models
-
-# Expose port
+# Expose Flask API port
 EXPOSE 5000
 
-# Set environment variables
-ENV FLASK_APP=app.py
-ENV PYTHONUNBUFFERED=1
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
-
-# Run the application
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]

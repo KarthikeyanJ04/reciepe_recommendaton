@@ -3,7 +3,6 @@ import numpy as np
 import pickle
 import sqlite3
 import json
-import time
 import gc
 import os
 from sklearn.metrics.pairwise import cosine_similarity
@@ -19,7 +18,7 @@ print("="*80)
 
 class HybridRecipeRecommender:
     """
-    Hybrid recommender with TF-IDF, Semantic, and optional LLM (KhaanaGPT)
+    Hybrid recommender with TF-IDF and Semantic Search
     """
 
     def __init__(self, model_path='models/'):
@@ -39,7 +38,7 @@ class HybridRecipeRecommender:
         print(f"    ✓ {self.embeddings.shape[0]:,} embeddings × {self.embeddings.shape[1]} dims")
         print(f"    ✓ Using memory-mapping (low RAM usage)")
 
-        # 3. Load sentence transformer
+        # 3. Load embedding model (for encoding queries)
         print("  Loading sentence transformer...")
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         if torch.cuda.is_available():
@@ -57,65 +56,49 @@ class HybridRecipeRecommender:
         recipe_count = cursor.fetchone()[0]
         print(f"    ✓ {recipe_count:,} recipes in database")
 
-        # 5. Build vocabulary for typo correction
+        # 5. Build vocabulary for spell check
         self.vocab = set(self.tfidf.vocabulary_.keys())
         print(f"    ✓ {len(self.vocab):,} ingredient vocabulary")
 
-        # 6. Load LLM (KhaanaGPT)
-        self.llm_pipeline = None
-        self.llm_enabled = False
-        try:
-            print("  Loading LLM for recipe generation...")
-            from transformers import pipeline
-            
-            model_path_llm = 'models/khaanaGPT'
-            if os.path.exists(model_path_llm):
-                self.llm_pipeline = pipeline(
-                    task='text-generation',
-                    model=model_path_llm,
-                    device=0 if torch.cuda.is_available() else -1
-                )
-                self.llm_enabled = True
-                print("    ✓ LLM loaded successfully (KhaanaGPT)")
-            else:
-                print(f"    ⚠ Model not found at {model_path_llm}")
-        except Exception as e:
-            print(f"    ⚠ LLM not available: {e}")
-
         print(f"\n✓ Recommender ready!")
-        print(f"  TF-IDF: ✓  |  Semantic: ✓  |  LLM: {'✓' if self.llm_enabled else '✗'}")
-
-    # ---------------------------------------------------------------------
-    # Helper Functions
-    # ---------------------------------------------------------------------
+        print(f"  TF-IDF: ✓  |  Semantic: ✓")
 
     def _fix_typos(self, user_input):
+        """Auto-correct typos using vocabulary"""
         words = user_input.lower().split()
-        corrected, corrections = [], []
+        corrected = []
+        corrections = []
+
         for word in words:
             if word in self.vocab:
                 corrected.append(word)
             else:
-                match = get_close_matches(word, self.vocab, n=1, cutoff=0.75)
-                if match:
-                    corrected.append(match[0])
-                    corrections.append(f"{word}→{match[0]}")
+                matches = get_close_matches(word, self.vocab, n=1, cutoff=0.75)
+                if matches:
+                    corrected.append(matches[0])
+                    corrections.append(f"{word}→{matches[0]}")
                 else:
                     corrected.append(word)
+
         return ' '.join(corrected), corrections
 
     def _get_recipes(self, indices):
+        """Fetch recipes from database"""
         if hasattr(indices, 'tolist'):
             indices = indices.tolist()
+
         if len(indices) == 0:
             return {}
+
         max_idx = self.recipe_tfidf.shape[0] - 1
-        valid_indices = [int(i) for i in indices if 0 <= int(i) <= max_idx]
+        valid_indices = [int(idx) for idx in indices if 0 <= int(idx) <= max_idx]
+
         if len(valid_indices) == 0:
             return {}
 
         placeholders = ','.join(['?'] * len(valid_indices))
         query = f"SELECT * FROM recipes WHERE idx IN ({placeholders})"
+
         try:
             cursor = self.db_conn.execute(query, valid_indices)
             return {row['idx']: dict(row) for row in cursor.fetchall()}
@@ -124,62 +107,91 @@ class HybridRecipeRecommender:
             return {}
 
     def _parse_list_field(self, field_value):
+        """Parse ingredients or directions from various formats"""
         if not field_value or field_value == 'nan' or pd.isna(field_value):
             return []
-        s = str(field_value).strip()
-        if not s:
+        
+        field_str = str(field_value).strip()
+        if not field_str:
             return []
-
-        # JSON-style
-        if s.startswith('['):
+        
+        if field_str.startswith('['):
             try:
-                parsed = json.loads(s.replace("'", '"'))
+                field_str_fixed = field_str.replace("'", '"')
+                parsed = json.loads(field_str_fixed)
                 if isinstance(parsed, list):
-                    return [str(x).strip() for x in parsed if x and str(x).strip() != 'nan']
-            except Exception:
-                pass
-
-        # newline split
-        if '\n' in s:
-            return [x.strip() for x in s.split('\n') if x.strip() and x.strip() != 'nan']
-
-        # sentence split
-        if any(w in s.lower() for w in ['bake', 'cook', 'mix', 'heat', 'add']):
-            sentences = re.split(r'\.\s+(?=[A-Z])', s)
-            steps = []
-            for st in sentences:
-                st = st.strip()
-                if st and len(st) > 10:
-                    if not st.endswith('.'):
-                        st += '.'
-                    steps.append(st)
-            if steps:
-                return steps
-        return [s] if s else []
+                    return [str(item).strip() for item in parsed if str(item).strip() and str(item).strip() != 'nan']
+            except json.JSONDecodeError:
+                try:
+                    content = field_str.strip('[]')
+                    matches = re.findall(r'["\']([^"\']+)["\']', content)
+                    if matches:
+                        items = [m.strip() for m in matches if m.strip() and m.strip() != 'nan']
+                        if items:
+                            return items
+                    
+                    items = [item.strip().strip('"\'') for item in content.split(',')]
+                    items = [i for i in items if i and i != 'nan']
+                    if items:
+                        return items
+                except:
+                    pass
+        
+        if '\n' in field_str:
+            lines = [line.strip() for line in field_str.split('\n') 
+                    if line.strip() and line.strip() != 'nan']
+            if len(lines) > 1:
+                return lines
+        
+        if any(word in field_str.lower() for word in ['bake', 'cook', 'mix', 'pour', 'add', 'place', 'heat']):
+            sentences = re.split(r'\.\s+(?=[A-Z])', field_str)
+            if len(sentences) > 1:
+                steps = []
+                for sent in sentences:
+                    sent = sent.strip()
+                    if sent and len(sent) > 10:
+                        if not sent.endswith('.'):
+                            sent += '.'
+                        steps.append(sent)
+                if len(steps) > 1:
+                    return steps
+        
+        return [field_str] if field_str else []
 
     def _format_results(self, indices, scores, user_input):
+        """Format recipe results and sort by coverage"""
         recipes_dict = self._get_recipes(indices)
         user_set = set(user_input.lower().split())
-        results = []
 
+        results = []
+        
         for rank, (idx, score) in enumerate(zip(indices, scores), 1):
             if idx not in recipes_dict:
                 continue
+
             recipe = recipes_dict[idx]
+            
             recipe_ing_str = str(recipe.get('cleaned_ingredients', '')).lower()
             recipe_ing_str = recipe_ing_str.strip('[]').replace('"', '').replace("'", '')
             recipe_ing = set(recipe_ing_str.split()) if recipe_ing_str else set()
+
             matching = user_set.intersection(recipe_ing)
             missing = recipe_ing.difference(user_set)
             coverage = len(matching) / len(recipe_ing) if recipe_ing else 0
 
             ingredients_raw = recipe.get('ingredients_raw') or recipe.get('ingredients', '')
             ingredients_list = self._parse_list_field(ingredients_raw)
+
             directions_raw = recipe.get('instructions') or recipe.get('directions', '')
             directions_list = self._parse_list_field(directions_raw)
 
-            description = recipe.get('description', '') or ''
-            image_url = recipe.get('image_url', '') or ''
+            description = str(recipe.get('description', '')).strip()
+            if description == 'nan' or not description:
+                description = ''
+
+            image_url = str(recipe.get('image_url', '')).strip()
+            if image_url == 'nan':
+                image_url = ''
 
             results.append({
                 'rank': rank,
@@ -201,21 +213,24 @@ class HybridRecipeRecommender:
                 'num_missing': len(missing)
             })
 
+        # Sort by coverage
         results.sort(key=lambda x: x['coverage'], reverse=True)
+        
+        # Re-assign ranks
         for i, r in enumerate(results, 1):
             r['rank'] = i
+
         return results
 
-    # ---------------------------------------------------------------------
-    # Search Methods
-    # ---------------------------------------------------------------------
-
     def search_tfidf(self, user_input, top_n=10):
+        """Fast TF-IDF search"""
         corrected, corrections = self._fix_typos(user_input)
         user_tfidf = self.tfidf.transform([corrected])
-        sims = cosine_similarity(user_tfidf, self.recipe_tfidf)[0]
-        top_idx = np.argsort(sims)[-(top_n * 3):][::-1]
-        results = self._format_results(top_idx[:top_n], sims[top_idx[:top_n]], corrected)
+        similarities = cosine_similarity(user_tfidf, self.recipe_tfidf)[0]
+        top_indices = np.argsort(similarities)[-(top_n * 3):][::-1]
+        top_scores = similarities[top_indices]
+        results = self._format_results(top_indices[:top_n], top_scores[:top_n], corrected)
+
         return {
             'method': 'TF-IDF',
             'original_query': user_input,
@@ -225,127 +240,41 @@ class HybridRecipeRecommender:
         }
 
     def search_semantic(self, user_input, top_n=10):
-        query_emb = self.embedding_model.encode(
+        """Semantic search"""
+        query_embedding = self.embedding_model.encode(
             [user_input.lower()],
             convert_to_numpy=True,
             device='cuda' if torch.cuda.is_available() else 'cpu',
             normalize_embeddings=True
         )
+
         CHUNK_SIZE = 50000
+        num_recipes = self.embeddings.shape[0]
+
         all_scores = []
-        for i in range(0, self.embeddings.shape[0], CHUNK_SIZE):
-            chunk = np.array(self.embeddings[i:i+CHUNK_SIZE])
-            chunk_scores = np.dot(chunk, query_emb.T).flatten()
+        for i in range(0, num_recipes, CHUNK_SIZE):
+            end_idx = min(i + CHUNK_SIZE, num_recipes)
+            chunk = np.array(self.embeddings[i:end_idx])
+            chunk_scores = np.dot(chunk, query_embedding.T).flatten()
             all_scores.append(chunk_scores)
             del chunk
             gc.collect()
 
         scores = np.concatenate(all_scores)
-        top_idx = np.argsort(scores)[-(top_n * 2):][::-1]
-        results = self._format_results(top_idx[:top_n], scores[top_idx[:top_n]], user_input)
-        return {'method': 'Semantic', 'query': user_input, 'results': results}
+        top_indices = np.argsort(scores)[-(top_n * 2):][::-1]
+        top_scores = scores[top_indices]
+        results = self._format_results(top_indices[:top_n], top_scores[:top_n], user_input)
 
-    # ---------------------------------------------------------------------
-    # Fixed LLM Section
-    # ---------------------------------------------------------------------
-
-    def search_llm(self, user_input, top_n=1):
-        """Generate recipe using KhaanaGPT with proper ingredients/instructions split."""
-        if not self.llm_enabled:
-            return {
-                'method': 'LLM',
-                'query': user_input,
-                'error': 'LLM model not loaded',
-                'results': []
-            }
-
-        print(f"  Generating recipe with KhaanaGPT for: {user_input}")
-
-        def create_prompt(ingredients):
-            ingredients = ','.join([x.strip().lower() for x in ingredients.split(',')])
-            ingredients = ingredients.strip().replace(',', '\n')
-            return f"<|startoftext|>Ingredients:\n{ingredients}\n"
-
-        prompt = create_prompt(user_input)
-        print(prompt)
-
-        try:
-            output = self.llm_pipeline(
-                prompt,
-                max_new_tokens=512,
-                penalty_alpha=0.6,
-                top_k=4,
-                pad_token_id=50259
-            )[0]['generated_text']
-
-            # Remove the prompt from output if present
-            generated_text = output.replace(prompt, '', 1).strip() if prompt in output else output.strip()
-
-            # -----------------------
-            # Split ingredients & directions by headers
-            # -----------------------
-            ingredients_list = []
-            directions_list = []
-
-            split_match = re.split(r'(?i)ingredients:|instructions:', generated_text)
-            if len(split_match) == 3:
-                # split_match[1] = ingredients, split_match[2] = instructions
-                ingredients_list = [l.strip() for l in split_match[1].split('\n') if l.strip()]
-                directions_list = [l.strip() for l in split_match[2].split('\n') if l.strip()]
-            elif len(split_match) == 2:
-                ingredients_list = [l.strip() for l in split_match[1].split('\n') if l.strip()]
-            else:
-                # fallback heuristic
-                lines = [l.strip() for l in generated_text.split('\n') if l.strip()]
-                found_directions = False
-                for line in lines:
-                    if not found_directions:
-                        if line.endswith('.') or any(verb in line.lower() for verb in [
-                            'heat', 'add', 'mix', 'cook', 'stir', 'boil', 'fry', 'pour', 'serve', 'allow'
-                        ]):
-                            found_directions = True
-                            directions_list.append(line)
-                        else:
-                            ingredients_list.append(line)
-                    else:
-                        directions_list.append(line)
-
-            result = {
-                'rank': 1,
-                'title': "AI Generated Recipe",
-                'description': f'AI-generated recipe using: {user_input}',
-                'cuisine': 'Indian',
-                'course': 'Main Course',
-                'diet': 'Vegetarian',
-                'dataset': 'KhaanaGPT',
-                'score': 1.0,
-                'coverage': 100.0,
-                'coverage_percent': 100.0,
-                'link': '',
-                'image_url': '',
-                'ingredients': ingredients_list,
-                'directions': directions_list,
-                'matching_ingredients': [],
-                'missing_ingredients': [],
-                'num_missing': 0
-            }
-
-            return {
-                'method': 'LLM (KhaanaGPT)',
-                'query': user_input,
-                'results': [result]
-            }
-
-        except Exception as e:
-            print(f"  ⚠ Generation error: {e}")
-            return {'method': 'LLM', 'query': user_input, 'error': str(e), 'results': []}
-
-    # ---------------------------------------------------------------------
-    # Hybrid combination
-    # ---------------------------------------------------------------------
+        return {
+            'method': 'Semantic',
+            'query': user_input,
+            'results': results
+        }
 
     def search_hybrid(self, user_input, top_n=10, semantic_fallback=True):
+        """Hybrid search"""
         tfidf_results = self.search_tfidf(user_input, top_n=top_n)
+
         has_good_results = (
             tfidf_results['results'] and
             tfidf_results['results'][0]['coverage'] > 0.50
@@ -356,18 +285,22 @@ class HybridRecipeRecommender:
             return tfidf_results
 
         semantic_results = self.search_semantic(user_input, top_n=top_n)
-        seen_titles, combined = set(), []
 
-        for r in tfidf_results['results']:
-            if r['title'] not in seen_titles:
-                seen_titles.add(r['title'])
-                combined.append(r)
+        seen_titles = set()
+        combined = []
 
-        for r in semantic_results['results']:
-            if r['title'] not in seen_titles and len(combined) < top_n:
-                r['from_semantic'] = True
-                seen_titles.add(r['title'])
-                combined.append(r)
+        for result in tfidf_results['results']:
+            title = result['title']
+            if title not in seen_titles:
+                seen_titles.add(title)
+                combined.append(result)
+
+        for result in semantic_results['results']:
+            title = result['title']
+            if title not in seen_titles and len(combined) < top_n:
+                seen_titles.add(title)
+                result['from_semantic'] = True
+                combined.append(result)
 
         for i, r in enumerate(combined[:top_n], 1):
             r['rank'] = i
@@ -379,27 +312,3 @@ class HybridRecipeRecommender:
             'corrections': tfidf_results.get('corrections', []),
             'results': combined[:top_n]
         }
-
-
-# ---------------------------------------------------------------------
-# Standalone test runner
-# ---------------------------------------------------------------------
-if __name__ == "__main__":
-    recommender = HybridRecipeRecommender(model_path='models/')
-
-    test_ingredients = [
-        'paneer, cream, tomato, onion',
-        'chicken, tomatoes, aloo, jeera, curry powder',
-        'rice, potatoes, spinach'
-    ]
-
-    for ing in test_ingredients:
-        print("="*70)
-        print(f"INPUT: {ing}")
-        print("="*70)
-
-        if recommender.llm_enabled:
-            result = recommender.search_llm(ing)
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print("⚠ KhaanaGPT model not loaded.")
