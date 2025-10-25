@@ -1,0 +1,247 @@
+/* static/style.css */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #667eea;
+    --secondary: #764ba2;
+    --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--gradient);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+
+.header {
+    background: var(--gradient);
+    color: white;
+    padding: 50px 40px;
+    text-align: center;
+}
+
+.header h1 { font-size: 2.8rem; margin-bottom: 12px; font-weight: 700; }
+.header p { font-size: 1.2rem; opacity: 0.95; }
+
+.content { padding: 40px; }
+
+.search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.search-box input {
+    flex: 1;
+    padding: 18px 24px;
+    border: 2px solid #e8e8e8;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+.search-btn {
+    padding: 18px 36px;
+    background: var(--gradient);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.search-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(102,126,234,0.3);
+}
+
+.search-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+}
+
+.filter-btn {
+    padding: 12px 24px;
+    border: 2px solid #e8e8e8;
+    background: white;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.filter-btn:hover { border-color: var(--primary); }
+
+.filter-btn.active {
+    background: var(--gradient);
+    color: white;
+    border-color: transparent;
+}
+
+.loading {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.recipe-card {
+    background: #f8f9fc;
+    border-radius: 20px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: transform 0.3s;
+}
+
+.recipe-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.recipe-header {
+    background: var(--gradient);
+    color: white;
+    padding: 28px 32px;
+}
+
+.recipe-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.recipe-meta {
+    display: flex;
+    gap: 24px;
+    font-size: 0.95rem;
+    opacity: 0.95;
+    flex-wrap: wrap;
+}
+
+.recipe-description {
+    background: rgba(255,255,255,0.15);
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 12px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.recipe-body { padding: 32px; }
+
+.section-title {
+    color: var(--primary);
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e8e8e8;
+}
+
+.ingredients-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+.ingredient-item {
+    background: white;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid #e8e8e8;
+    transition: all 0.2s;
+}
+
+.ingredient-item:hover {
+    border-color: var(--primary);
+    transform: translateX(4px);
+}
+
+.instructions-list { counter-reset: step; }
+
+.instruction-step {
+    counter-increment: step;
+    position: relative;
+    padding-left: 50px;
+    margin-bottom: 20px;
+    line-height: 1.7;
+    color: #333;
+}
+
+.instruction-step::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: var(--primary);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.tips-section {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 24px;
+}
+
+.tip-item {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.no-results {
+    text-align: center;
+    padding: 80px 20px;
+    color: #666;
+    font-size: 1.15rem;
+}
+
+@media (max-width: 768px) {
+    .header h1 { font-size: 2rem; }
+    .content { padding: 24px; }
+    .search-box { flex-direction: column; }
+    .ingredients-grid { grid-template-columns: 1fr; }
+}

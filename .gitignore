@@ -1,7 +1,8 @@
-models/
+model_chunks/
 venv/
 *.npz
 *.npy
 *.db
 *.bin
 __pycache__/
+data/

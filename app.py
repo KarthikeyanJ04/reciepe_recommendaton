@@ -1,91 +1,176 @@
-from flask import Flask, request, jsonify, render_template
-from recommender import HybridRecipeRecommender
-import traceback
+# app.py - Auto-calculate missing values
+
+import os
+import sqlite3
+import numpy as np
+import pickle
+from flask import Flask, render_template, request, jsonify
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy import sparse
+from sentence_transformers import SentenceTransformer
+from nlg_generator import nlg
 
 app = Flask(__name__)
 
-print("Loading hybrid recommender...")
-recommender = HybridRecipeRecommender()
-print("Hybrid recommender loaded successfully!")
+DB_FILE = 'recipes.db'
+MODELS_FILE = 'recipe_models.pkl'
+
+print("=" * 60)
+print("🚀 AI Recipe Finder (Chunk-based)")
+print("=" * 60)
+
+# Load metadata
+print("\n📥 Loading models...")
+with open(MODELS_FILE, 'rb') as f:
+    models = pickle.load(f)
+
+tfidf_vectorizer = models['tfidf_vectorizer']
+recipe_ids = models['recipe_ids']
+
+# In app.py, replace the auto-detection part:
+
+if 'num_chunks' in models:
+    num_chunks = models['num_chunks']
+    chunk_size = models['chunk_size']
+    chunks_dir = models['chunks_dir']
+else:
+    # Auto-detect from actual files
+    chunks_dir = models.get('chunks_dir', 'model_chunks')
+    
+    # Get all chunk files and find max index
+    chunk_files = [f for f in os.listdir(chunks_dir) if f.startswith('tfidf_chunk_') and f.endswith('.npz')]
+    
+    # Extract chunk indices from filenames
+    chunk_indices = [int(f.split('_')[-1].split('.')[0]) for f in chunk_files]
+    num_chunks = max(chunk_indices) + 1  # +1 because indices start at 0
+    
+    # Calculate chunk size from first chunk
+    first_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_0.npz')
+    chunk_size = first_chunk.shape[0]
+    
+    print(f"⚠️  Auto-detected {num_chunks} chunks (indices 0-{max(chunk_indices)})")
+
+
+print(f"\n✅ Loaded metadata for {len(recipe_ids):,} recipes")
+print(f"   Chunks: {num_chunks} x ~{chunk_size:,} recipes")
+
+# Initialize embedding model
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+def get_recipe_by_id(recipe_id):
+    """Get recipe from database"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, name, image_url, description, cuisine, course, diet, 
+               prep_time, ingredients, instructions, category
+        FROM recipes WHERE id = ?
+    ''', (recipe_id,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        'id': row[0],
+        'name': row[1],
+        'image_url': row[2],
+        'description': row[3],
+        'cuisine': row[4],
+        'course': row[5],
+        'diet': row[6],
+        'prep_time': row[7],
+        'ingredients': [i.strip() for i in row[8].split('|') if i.strip()],
+        'instructions': [i.strip() for i in row[9].split('|') if i.strip()],
+        'category': row[10]
+    }
+
+def search_recipes(query, category='all', top_k=10):
+    """Search using chunked models"""
+    
+    # Filter by category
+    if category != 'all':
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM recipes WHERE category = ?', (category,))
+        category_ids = set([r[0] for r in cursor.fetchall()])
+        conn.close()
+        filtered_indices = [i for i, rid in enumerate(recipe_ids) if rid in category_ids]
+    else:
+        filtered_indices = list(range(len(recipe_ids)))
+    
+    if not filtered_indices:
+        return []
+    
+    q = query.lower()
+    
+    # Transform query
+    q_tfidf = tfidf_vectorizer.transform([q])
+    q_emb = embedding_model.encode([q])
+    
+    # Calculate scores by loading chunks
+    all_scores = np.zeros(len(recipe_ids))
+    
+    for chunk_idx in range(num_chunks):
+        # Load chunks
+        tfidf_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_{chunk_idx}.npz')
+        emb_chunk = np.load(f'{chunks_dir}/emb_chunk_{chunk_idx}.npy')
+    
+        # Calculate actual chunk size (last chunk may be smaller)
+        actual_chunk_size = tfidf_chunk.shape[0]  # Get actual size from the chunk
+        start_idx = chunk_idx * chunk_size
+        end_idx = start_idx + actual_chunk_size  # Use actual size, not chunk_size
+    
+        tfidf_scores = cosine_similarity(q_tfidf, tfidf_chunk).flatten()
+        emb_scores = cosine_similarity(q_emb, emb_chunk).flatten()
+    
+        # Hybrid
+        chunk_scores = 0.6 * tfidf_scores + 0.4 * emb_scores
+        all_scores[start_idx:end_idx] = chunk_scores  # Now sizes match
+    
+        del tfidf_chunk, emb_chunk, tfidf_scores, emb_scores, chunk_scores
+    
+    # Get top results
+    filtered_scores = all_scores[filtered_indices]
+    top_idx = np.argsort(filtered_scores)[::-1][:top_k]
+    
+    results = []
+    for idx in top_idx:
+        orig_idx = filtered_indices[idx]
+        recipe = get_recipe_by_id(recipe_ids[orig_idx])
+        
+        if recipe:
+            recipe['similarity'] = float(filtered_scores[idx])
+            if not recipe['description']:
+                recipe['description'] = nlg.generate_full_description(recipe)
+            recipe['tips'] = nlg.generate_tips(recipe)
+            results.append(recipe)
+    
+    return results
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
-@app.route('/api/recommend', methods=['POST'])
-def recommend():
+@app.route('/search', methods=['POST'])
+def search():
     try:
-        data = request.get_json()
-        ingredients = data.get('ingredients', '').strip()
-        top_n = int(data.get('top_n', 50))
-        search_mode = data.get('search_mode', 'hybrid')
-
-        if not ingredients:
-            return jsonify({'error': 'Please enter some ingredients'}), 400
-
-        # Select search method based on mode
-        if search_mode == 'tfidf':
-            results = recommender.search_tfidf(ingredients, top_n=top_n)
-        elif search_mode == 'semantic':
-            results = recommender.search_semantic(ingredients, top_n=top_n)
-        elif search_mode == 'llm':  # NEW
-            results = recommender.search_llm(ingredients, top_n=1)
-        else:  # hybrid (default)
-            results = recommender.search_hybrid(ingredients, top_n=top_n)
-
-        return jsonify({
-            'success': True,
-            'query': ingredients,
-            'method': results['method'],
-            'corrections': results.get('corrections', []),
-            'recommendations': results['results'],
-            'total_found': len(results['results'])
-        })
-
+        data = request.json
+        query = data.get('query', '').strip()
+        category = data.get('category', 'all')
+        
+        if not query:
+            return jsonify({'success': False, 'error': 'No query'})
+        
+        recipes = search_recipes(query, category)
+        return jsonify({'success': True, 'recipes': recipes})
     except Exception as e:
-        print(f"ERROR in /api/recommend: {e}")
-        traceback.print_exc()
-        return jsonify({'error': 'Server error occurred. Please try again.'}), 500
+        print(f"Error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
-
-@app.route('/api/stats')
-def stats():
-    """Get system statistics"""
-    try:
-        return jsonify({
-            'total_recipes': recommender.recipe_tfidf.shape[0],
-            'vocabulary_size': len(recommender.vocab),
-            'embedding_dimensions': recommender.embeddings.shape[1],
-            'datasets': {
-                'recipenlg': 'RecipeNLG',
-                'archanas': 'Archana\'s Kitchen'
-            }
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# NEW: Health check endpoint
-@app.route('/api/health')
-def health():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'recommender': 'loaded',
-        'models': {
-            'tfidf': True,
-            'embeddings': True
-        }
-    })
-
-if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🚀 Flask Recipe Recommender Server")
-    print("="*60)
-    print(f"📊 Total recipes: {recommender.recipe_tfidf.shape[0]:,}")
-    print(f"📚 Vocabulary size: {len(recommender.vocab):,}")
-    print(f"🧠 Embedding dimensions: {recommender.embeddings.shape[1]}")
-    print("="*60)
-    print("\n🌐 Server starting at http://localhost:5000")
-    print("Press CTRL+C to stop\n")
-    
+if __name__ == "__main__":
+    print("\n🌐 Starting server on http://localhost:5000\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
