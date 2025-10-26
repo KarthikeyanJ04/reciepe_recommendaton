@@ -9,6 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy import sparse
 from sentence_transformers import SentenceTransformer
 from nlg_generator import nlg
+import re
 
 app = Flask(__name__)
 
@@ -155,6 +156,10 @@ def search_recipes(query, category='all', top_k=10):
 def index():
     return render_template('index.html')
 
+@app.route('/cooking-assistant')
+def cooking_assistant():
+    return render_template('cooking_assistant.html')
+
 @app.route('/search', methods=['POST'])
 def search():
     try:
@@ -174,3 +179,57 @@ def search():
 if __name__ == "__main__":
     print("\n🌐 Starting server on http://localhost:5000\n")
     app.run(host='0.0.0.0', port=5000, debug=True)
+
+# app.py - Add cooking assistant endpoint
+
+
+@app.route('/cook-with-ai', methods=['POST'])
+def cook_with_ai():
+    """Parse recipe and extract timers"""
+    try:
+        data = request.json
+        recipe_id = data.get('recipe_id')
+        
+        recipe = get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'success': False, 'error': 'Recipe not found'})
+        
+        # Parse instructions for timers
+        parsed_steps = []
+        for i, instruction in enumerate(recipe['instructions']):
+            # Extract time patterns
+            time_patterns = [
+                r'(\d+)\s*(?:minutes?|mins?)',
+                r'(\d+)\s*(?:hours?|hrs?)',
+                r'(\d+)\s*(?:seconds?|secs?)'
+            ]
+            
+            timers = []
+            for pattern in time_patterns:
+                matches = re.findall(pattern, instruction, re.IGNORECASE)
+                for match in matches:
+                    duration = int(match)
+                    if 'hour' in pattern or 'hr' in pattern:
+                        duration *= 60  # Convert to minutes
+                    elif 'sec' in pattern:
+                        duration = duration / 60  # Convert to minutes
+                    timers.append(duration)
+            
+            parsed_steps.append({
+                'step_number': i + 1,
+                'text': instruction,
+                'timers': timers,
+                'has_timer': len(timers) > 0
+            })
+        
+        return jsonify({
+            'success': True,
+            'recipe': recipe,
+            'parsed_steps': parsed_steps
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+

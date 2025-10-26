@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cooking Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .cooking-assistant {
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        
+        .ai-avatar {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .avatar-image {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-size: 80px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .avatar-speaking {
+            animation: speak 0.5s infinite;
+        }
+        
+        @keyframes speak {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .speech-bubble {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 10px solid transparent;
+            border-bottom-color: white;
+        }
+        
+        .step-container {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fc;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step-active {
+            background: #e8f0ff;
+            border-left-color: #4caf50;
+        }
+        
+        .timer-display {
+            font-size: 48px;
+            text-align: center;
+            color: #667eea;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .timer-active {
+            color: #4caf50;
+            animation: timerBlink 1s infinite;
+        }
+        
+        @keyframes timerBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .control-btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transition: transform 0.2s;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="cooking-assistant">
+        <div class="ai-avatar">
+            <div class="avatar-image" id="avatar">👨‍🍳</div>
+            <h2>Chef AI Assistant</h2>
+        </div>
+        
+        <div class="speech-bubble" id="speechBubble">
+            <p id="avatarSpeech">Hi! I'm your AI cooking assistant. Let me guide you through this recipe step by step.</p>
+        </div>
+        
+        <div id="timerDisplay" class="timer-display" style="display: none;">
+            <span id="timerValue">00:00</span>
+        </div>
+        
+        <div id="stepsContainer"></div>
+        
+        <div class="controls">
+            <button class="control-btn" id="startBtn" onclick="startCooking()">Start Cooking</button>
+            <button class="control-btn" id="nextBtn" onclick="nextStep()" disabled>Next Step</button>
+            <button class="control-btn" id="pauseBtn" onclick="pauseTimer()" disabled style="display: none;">Pause Timer</button>
+        </div>
+    </div>
+    
+    <script>
+        let currentStep = 0;
+        let steps = [];
+        let timerInterval = null;
+        let remainingSeconds = 0;
+        let isPaused = false;
+        
+        // Text-to-Speech
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                window.speechSynthesis.speak(utterance);
+                
+                // Animate avatar
+                document.getElementById('avatar').classList.add('avatar-speaking');
+                setTimeout(() => {
+                    document.getElementById('avatar').classList.remove('avatar-speaking');
+                }, text.length * 50);
+            }
+        }
+        
+        // Load recipe
+        async function loadRecipe(recipeId) {
+            const response = await fetch('/cook-with-ai', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({recipe_id: recipeId})
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                steps = data.parsed_steps;
+                displaySteps();
+                speak(`Great! Let's cook ${data.recipe.name}. I'll guide you through ${steps.length} steps.`);
+            }
+        }
+        
+        function displaySteps() {
+            const container = document.getElementById('stepsContainer');
+            container.innerHTML = steps.map((step, i) => `
+                <div class="step-container" id="step-${i}">
+                    <h3>Step ${step.step_number}</h3>
+                    <p>${step.text}</p>
+                    ${step.has_timer ? '<span>⏱️ Timer Required</span>' : ''}
+                </div>
+            `).join('');
+        }
+        
+        function startCooking() {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('nextBtn').disabled = false;
+            nextStep();
+        }
+        
+        function nextStep() {
+            if (currentStep >= steps.length) {
+                speak("Congratulations! Your dish is ready. Enjoy your meal!");
+                document.getElementById('avatarSpeech').textContent = "🎉 Cooking complete!";
+                return;
+            }
+            
+            // Highlight current step
+            document.querySelectorAll('.step-container').forEach(el => {
+                el.classList.remove('step-active');
+            });
+            document.getElementById(`step-${currentStep}`).classList.add('step-active');
+            
+            const step = steps[currentStep];
+            document.getElementById('avatarSpeech').textContent = step.text;
+            speak(step.text);
+            
+            // Start timer if needed
+            if (step.has_timer && step.timers.length > 0) {
+                startTimer(step.timers[0]);
+            } else {
+                currentStep++;
+            }
+        }
+        
+        function startTimer(minutes) {
+            remainingSeconds = Math.floor(minutes * 60);
+            document.getElementById('timerDisplay').style.display = 'block';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('nextBtn').disabled = true;
+            
+            speak(`Starting timer for ${minutes} minutes.`);
+            
+            timerInterval = setInterval(() => {
+                if (!isPaused) {
+                    remainingSeconds--;
+                    updateTimerDisplay();
+                    
+                    if (remainingSeconds <= 0) {
+                        clearInterval(timerInterval);
+                        document.getElementById('timerDisplay').style.display = 'none';
+                        document.getElementById('pauseBtn').style.display = 'none';
+                        document.getElementById('nextBtn').disabled = false;
+                        speak("Timer finished! Ready for the next step?");
+                        playAlarm();
+                        currentStep++;
+                    }
+                }
+            }, 1000);
+        }
+        
+        function updateTimerDisplay() {
+            const mins = Math.floor(remainingSeconds / 60);
+            const secs = remainingSeconds % 60;
+            const display = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            document.getElementById('timerValue').textContent = display;
+            document.getElementById('timerDisplay').classList.add('timer-active');
+        }
+        
+        function pauseTimer() {
+            isPaused = !isPaused;
+            document.getElementById('pauseBtn').textContent = isPaused ? 'Resume' : 'Pause';
+        }
+        
+        function playAlarm() {
+            // Play notification sound
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE=');
+            audio.play();
+        }
+        
+        // Get recipe ID from URL or use demo
+        const urlParams = new URLSearchParams(window.location.search);
+        const recipeId = urlParams.get('recipe_id') || 1;
+        loadRecipe(recipeId);
+    </script>
+</body>
+</html>

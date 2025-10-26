@@ -1,4 +1,22 @@
 // static/app.js
+
+// Theme toggle functionality
+const themeToggle = document.getElementById('themeToggle');
+const htmlElement = document.documentElement;
+
+// Check for saved theme preference or default to 'light'
+const currentTheme = localStorage.getItem('theme') || 'light';
+htmlElement.setAttribute('data-theme', currentTheme);
+
+themeToggle.addEventListener('click', () => {
+    const currentTheme = htmlElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    
+    htmlElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+});
+
+// Original code - unchanged
 let selectedCategory = 'all';
 
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -16,7 +34,6 @@ document.getElementById('searchInput').addEventListener('keypress', function(e) 
 
 async function searchRecipes() {
     const query = document.getElementById('searchInput').value.trim();
-    
     if (!query) {
         alert('Please enter some ingredients!');
         return;
@@ -38,14 +55,13 @@ async function searchRecipes() {
         });
 
         const data = await response.json();
-
         if (data.success) {
             displayResults(data.recipes);
         } else {
-            results.innerHTML = `<div class="no-results">❌ ${data.error}</div>`;
+            results.innerHTML = `<div class="no-results">${data.message || 'No recipes found'}</div>`;
         }
     } catch (error) {
-        results.innerHTML = '<div class="no-results">❌ Search failed</div>';
+        results.innerHTML = '<div class="no-results">Error fetching recipes. Please try again.</div>';
     } finally {
         searchBtn.disabled = false;
         loading.style.display = 'none';
@@ -55,46 +71,35 @@ async function searchRecipes() {
 function displayResults(recipes) {
     const results = document.getElementById('results');
     
-    if (recipes.length === 0) {
-        results.innerHTML = '<div class="no-results">🔍 No recipes found. Try different ingredients!</div>';
+    if (!recipes || recipes.length === 0) {
+        results.innerHTML = '<div class="no-results">No recipes found. Try different ingredients!</div>';
         return;
     }
 
     results.innerHTML = recipes.map(recipe => `
         <div class="recipe-card">
             <div class="recipe-header">
-                <div class="recipe-title">${recipe.name}</div>
+                <h2 class="recipe-title">${recipe.name}</h2>
                 <div class="recipe-meta">
-                    <span>📊 Match: ${(recipe.similarity * 100).toFixed(1)}%</span>
-                    <span>🥘 ${recipe.ingredients.length} ingredients</span>
-                    <span>${recipe.category === 'vegetarian' ? '🥗 Veg' : '🍗 Non-Veg'}</span>
-                    ${recipe.cuisine ? `<span>🌍 ${recipe.cuisine}</span>` : ''}
-                    ${recipe.prep_time ? `<span>⏱️ ${recipe.prep_time}</span>` : ''}
+                    <span>🍽️ ${recipe.course || 'Main Course'}</span>
+
                 </div>
                 ${recipe.description ? `<div class="recipe-description">${recipe.description}</div>` : ''}
             </div>
-            
             <div class="recipe-body">
-                <div class="section-title">🥘 Ingredients</div>
-                <div class="ingredients-grid">
-                    ${recipe.ingredients.map(ing => `
-                        <div class="ingredient-item">${ing}</div>
-                    `).join('')}
-                </div>
-
-                <div class="section-title">👨‍🍳 Instructions</div>
-                <div class="instructions-list">
-                    ${recipe.instructions.map(step => `
-                        <div class="instruction-step">${step}</div>
-                    `).join('')}
-                </div>
-
-                ${recipe.tips && recipe.tips.length > 0 ? `
-                    <div class="tips-section">
-                        <div class="section-title" style="color: #856404; border-bottom-color: #ffeaa7;">💡 Cooking Tips</div>
-                        ${recipe.tips.map(tip => `<div class="tip-item">${tip}</div>`).join('')}
+                <div class="ingredients-section">
+                    <h3 class="section-title">Ingredients</h3>
+                    <div class="ingredients-list">
+                        ${recipe.ingredients.map(ing => `<div class="ingredient-item">• ${ing}</div>`).join('')}
                     </div>
-                ` : ''}
+                </div>
+                
+                <div class="instructions-section">
+                    <h3 class="section-title">Instructions</h3>
+                    <div class="instructions-list">
+                        ${recipe.instructions.map(step => `<div class="instruction-step">${step}</div>`).join('')}
+                    </div>
+                </div>
             </div>
         </div>
     `).join('');
