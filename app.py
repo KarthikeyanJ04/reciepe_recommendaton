@@ -10,6 +10,7 @@ from scipy import sparse
 from sentence_transformers import SentenceTransformer
 from nlg_generator import nlg
 import re
+import json
 
 app = Flask(__name__)
 
@@ -58,6 +59,39 @@ print(f"   Chunks: {num_chunks} x ~{chunk_size:,} recipes")
 # Initialize embedding model
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
+def _normalize_instruction(step):
+    """Normalize a single instruction string."""
+    if not isinstance(step, str):
+        return step
+
+    s = step.strip()
+
+    # If looks like a JSON array, try to parse and join tokens
+    if s.startswith('[') and s.endswith(']'):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                text = ' '.join([str(t).strip() for t in parsed if t])
+                text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+                s = text
+        except Exception:
+            pass
+
+    # Decode escaped unicode sequences
+    try:
+        if '\\u' in s or '\\n' in s:
+            s = s.encode('utf-8').decode('unicode_escape')
+    except Exception:
+        pass
+
+    # Common mojibake fixes
+    s = s.replace('â', '')
+    s = s.replace('\u00b0', '')
+    s = s.replace('Â', '')
+    s = re.sub(r'[\x00-\x1f\x7f]', '', s)
+
+    return s.strip()
+
 def get_recipe_by_id(recipe_id):
     """Get recipe from database"""
     conn = sqlite3.connect(DB_FILE)
@@ -85,7 +119,7 @@ def get_recipe_by_id(recipe_id):
         'diet': row[6],
         'prep_time': row[7],
         'ingredients': [i.strip() for i in row[8].split('|') if i.strip()],
-        'instructions': [i.strip() for i in row[9].split('|') if i.strip()],
+        'instructions': [_normalize_instruction(i.strip()) for i in row[9].split('|') if i.strip()],
         'category': row[10]
     }
 
@@ -117,8 +151,17 @@ def search_recipes(query, category='all', top_k=10):
     
     for chunk_idx in range(num_chunks):
         # Load chunks
-        tfidf_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_{chunk_idx}.npz')
-        emb_chunk = np.load(f'{chunks_dir}/emb_chunk_{chunk_idx}.npy')
+        try:
+            tfidf_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_{chunk_idx}.npz')
+        except FileNotFoundError:
+            print(f"Warning: tfidf_chunk_{chunk_idx}.npz not found")
+            continue
+            
+        try:
+            emb_chunk = np.load(f'{chunks_dir}/emb_chunk_{chunk_idx}.npy')
+        except FileNotFoundError:
+            print(f"Warning: emb_chunk_{chunk_idx}.npy not found")
+            continue
     
         # Calculate actual chunk size (last chunk may be smaller)
         actual_chunk_size = tfidf_chunk.shape[0]  # Get actual size from the chunk
@@ -176,13 +219,6 @@ def search():
         print(f"Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-if __name__ == "__main__":
-    print("\n🌐 Starting server on http://localhost:5000\n")
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
-# app.py - Add cooking assistant endpoint
-
-
 @app.route('/cook-with-ai', methods=['POST'])
 def cook_with_ai():
     """Parse recipe and extract timers"""
@@ -230,6 +266,10 @@ def cook_with_ai():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+if __name__ == "__main__":
+    print("\nStarting server on http://localhost:5000\n")
+    app.run(host='0.0.0.0', port=5000, debug=True)
 
 
 

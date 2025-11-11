@@ -1,0 +1,107 @@
+﻿// static/app.js
+
+// Theme toggle functionality
+const themeToggle = document.getElementById('themeToggle');
+const htmlElement = document.documentElement;
+
+// Check for saved theme preference or default to 'light'
+const currentTheme = localStorage.getItem('theme') || 'light';
+htmlElement.setAttribute('data-theme', currentTheme);
+
+themeToggle.addEventListener('click', () => {
+    const currentTheme = htmlElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    
+    htmlElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+});
+
+// Original code - unchanged
+let selectedCategory = 'all';
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        selectedCategory = this.dataset.category;
+    });
+});
+
+document.getElementById('searchBtn').addEventListener('click', searchRecipes);
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') searchRecipes();
+});
+
+async function searchRecipes() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) {
+        alert('Please enter some ingredients!');
+        return;
+    }
+
+    const searchBtn = document.getElementById('searchBtn');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+
+    searchBtn.disabled = true;
+    loading.style.display = 'block';
+    results.innerHTML = '';
+
+    try {
+        const response = await fetch('/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, category: selectedCategory })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            displayResults(data.recipes);
+        } else {
+            results.innerHTML = `<div class="no-results">${data.message || 'No recipes found'}</div>`;
+        }
+    } catch (error) {
+        results.innerHTML = '<div class="no-results">Error fetching recipes. Please try again.</div>';
+    } finally {
+        searchBtn.disabled = false;
+        loading.style.display = 'none';
+    }
+}
+
+function displayResults(recipes) {
+    const results = document.getElementById('results');
+    
+    if (!recipes || recipes.length === 0) {
+        results.innerHTML = '<div class="no-results">No recipes found. Try different ingredients!</div>';
+        return;
+    }
+
+    results.innerHTML = recipes.map(recipe => `
+        <div class="recipe-card">
+            <div class="recipe-header">
+                <h2 class="recipe-title">${recipe.name}</h2>
+                <div class="recipe-meta">
+                    <span>ðŸ½ï¸ ${recipe.course || 'Main Course'}</span>
+
+                </div>
+                ${recipe.description ? `<div class="recipe-description">${recipe.description}</div>` : ''}
+            </div>
+            <div class="recipe-body">
+                <div class="ingredients-section">
+                    <h3 class="section-title">Ingredients</h3>
+                    <div class="ingredients-list">
+                        ${recipe.ingredients.map(ing => `<div class="ingredient-item">â€¢ ${ing}</div>`).join('')}
+                    </div>
+                </div>
+                
+                <div class="instructions-section">
+                    <h3 class="section-title">Instructions</h3>
+                    <div class="instructions-list">
+                        ${recipe.instructions.map(step => `<div class="instruction-step">${(step||'').replace(/\n/g, '<br>')}</div>`).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
