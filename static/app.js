@@ -164,7 +164,17 @@ function displayResults(recipes){
             ${ renderInstructions(recipe) }
           </div>
         </div>
+        
+        <div class="recipe-actions">
+          <button class="cook-ai-btn" onclick="openCookingAssistant(${recipe.id})">
+            👨‍🍳 Cook with AI Assistant
+          </button>
+        </div>
       </div>
     </div>
   `).join('');
+}
+
+function openCookingAssistant(recipeId) {
+  window.open(`/cooking-assistant?recipe_id=${recipeId}`, 'cooking_window', 'width=1000,height=800');
 }

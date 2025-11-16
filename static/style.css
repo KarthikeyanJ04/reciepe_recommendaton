@@ -311,10 +311,6 @@ body {
     background: var(--bg-primary);
 }
 
-.instructions-section {
-    /* Takes remaining space */
-}
-
 .instructions-list { 
     counter-reset: step;
     display: flex;
@@ -347,6 +343,38 @@ body {
     font-weight: 800;
     font-size: 1.1rem;
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.recipe-actions {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px solid var(--border-color);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.cook-ai-btn {
+    padding: 16px 32px;
+    background: var(--gradient);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    white-space: nowrap;
+}
+
+.cook-ai-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+}
+
+.cook-ai-btn:active {
+    transform: translateY(0);
 }
 
 .no-results {

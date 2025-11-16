@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cooking Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .layout { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; height: 80vh; }
+        .panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow-y: auto; }
+        .avatar-section { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+        #avatarCanvas { width: 100%; height: 250px; border-radius: 10px; background: linear-gradient(135deg, #667eea 20%, #764ba2 100%); margin-bottom: 20px; }
+        .message-box { 
+            padding: 15px; 
+            background: #f5f5f5; 
+            border-radius: 10px; 
+            text-align: center; 
+            font-size: 13px; 
+            color: #333; 
+            line-height: 1.5; 
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-left: 4px solid #667eea;
+        }
+        .center-section { display: flex; flex-direction: column; }
+        .recipe-header { margin-bottom: 20px; }
+        .recipe-header h2 { color: #333; font-size: 24px; margin-bottom: 5px; }
+        .recipe-header p { color: #999; font-size: 13px; }
+        .steps-container { flex: 1; overflow-y: auto; }
+        .step { 
+            background: #f9f9f9; 
+            border-left: 4px solid #ddd; 
+            padding: 15px; 
+            margin-bottom: 12px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: all 0.3s;
+        }
+        .step:hover { background: #f0f0f0; }
+        .step.active { 
+            background: #e8eaf6; 
+            border-left-color: #667eea; 
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        .step.done { border-left-color: #4caf50; }
+        .step-number { 
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 12px;
+        }
+        .step.done .step-number { background: #4caf50; }
+        .step-text { color: #333; font-size: 14px; line-height: 1.5; }
+        .timer-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
+        .timer-display { font-size: 12px; color: #ff9800; font-weight: bold; }
+        .timer-controls { display: flex; gap: 6px; margin-top: 6px; }
+        .timer-btn { 
+            padding: 5px 10px; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 11px; 
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .btn-start { background: #4caf50; color: white; }
+        .btn-start:hover { background: #45a049; }
+        .btn-pause { background: #ff9800; color: white; }
+        .btn-pause:hover { background: #e68900; }
+        .btn-stop { background: #f44336; color: white; }
+        .btn-stop:hover { background: #da190b; }
+        .timer-time { display: inline-block; background: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 6px; }
+        .right-section { display: flex; flex-direction: column; }
+        .info-box { margin-bottom: 20px; }
+        .info-box h3 { font-size: 12px; text-transform: uppercase; color: #999; margin-bottom: 10px; letter-spacing: 1px; }
+        .ingredients { list-style: none; }
+        .ingredients li { padding: 8px; color: #555; font-size: 12px; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+        .ingredients li:before { content: "✓"; margin-right: 8px; }
+        .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
+        .btn { padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-next { background: #667eea; color: white; }
+        .btn-next:hover { background: #5568d3; }
+        .btn-prev { background: #f5f5f5; color: #333; border: 1px solid #ddd; }
+        .btn-prev:hover { background: #eee; }
+        .loading { display: flex; justify-content: center; align-items: center; height: 100%; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error-msg { color: #f44336; padding: 15px; background: #ffebee; border-radius: 8px; }
+        @media (max-width: 1100px) { 
+            .layout { grid-template-columns: 1fr; }
+            .avatar-section { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👨‍🍳 Cooking with AI</h1>
+            <p>Your personal cooking assistant</p>
+        </div>
+        
+        <div class="layout">
+            <!-- Left: Avatar -->
+            <div class="panel avatar-section">
+                <canvas id="avatarCanvas"></canvas>
+                <div class="message-box" id="avatarMsg">Welcome! Let's cook!</div>
+            </div>
+            
+            <!-- Center: Steps -->
+            <div class="panel center-section">
+                <div class="recipe-header">
+                    <h2 id="recipeName">Loading...</h2>
+                    <p id="recipeDesc">--</p>
+                </div>
+                <div class="steps-container" id="stepsContainer">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Right: Info & Ingredients -->
+            <div class="panel right-section">
+                <div class="info-box">
+                    <h3>Recipe Info</h3>
+                    <div style="font-size: 12px; color: #666;">
+                        <p><strong>Cuisine:</strong> <span id="cuisine">--</span></p>
+                        <p><strong>Course:</strong> <span id="course">--</span></p>
+                    </div>
+                </div>
+                
+                <div class="info-box">
+                    <h3>Ingredients</h3>
+                    <ul class="ingredients" id="ingredList"></ul>
+                </div>
+                
+                <div class="buttons">
+                    <button class="btn btn-next" onclick="nextStep()">Next</button>
+                    <button class="btn btn-prev" onclick="prevStep()">Previous</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        let steps = [];
+        let recipe = null;
+        let timers = {};
+
+        function initAvatar() {
+            const canvas = document.getElementById('avatarCanvas');
+            if (!canvas) return;
+            
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.setClearColor(0x667eea, 0.1);
+            
+            // Create avatar
+            const headGeom = new THREE.SphereGeometry(0.6, 32, 32);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const head = new THREE.Mesh(headGeom, headMat);
+            head.position.y = 0.8;
+            
+            // Eyes
+            const eyeGeom = new THREE.SphereGeometry(0.15, 32, 32);
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(eyeGeom, eyeMat);
+            leftEye.position.set(-0.2, 1.1, 0.5);
+            const rightEye = new THREE.Mesh(eyeGeom, eyeMat);
+            rightEye.position.set(0.2, 1.1, 0.5);
+            
+            // Body
+            const bodyGeom = new THREE.CapsuleGeometry(0.3, 1.2, 4, 8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x667eea });
+            const body = new THREE.Mesh(bodyGeom, bodyMat);
+            body.position.y = -0.3;
+            
+            scene.add(head, leftEye, rightEye, body);
+            
+            // Lighting
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+            const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambLight);
+            
+            camera.position.z = 2.5;
+            
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                head.rotation.y += 0.005;
+                body.rotation.y += 0.003;
+                const eyeScale = Math.sin(Date.now() * 0.001) > 0.99 ? 0.1 : 1;
+                leftEye.scale.y = eyeScale;
+                rightEye.scale.y = eyeScale;
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function loadRecipe() {
+            const params = new URLSearchParams(window.location.search);
+            const recipeId = params.get('recipe_id');
+            
+            if (!recipeId) {
+                document.getElementById('stepsContainer').innerHTML = '<div class="error-msg">❌ No recipe selected. Please go back and choose a recipe.</div>';
+                return;
+            }
+            
+            fetch('/cook-with-ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipe_id: parseInt(recipeId) })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    recipe = data.recipe;
+                    steps = data.parsed_steps;
+                    displayRecipe();
+                } else {
+                    document.getElementById('stepsContainer').innerHTML = '<div class="error-msg">❌ ' + (data.error || 'Failed to load recipe') + '</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                document.getElementById('stepsContainer').innerHTML = '<div class="error-msg">❌ Failed to load recipe. Check console for details.</div>';
+            });
+        }
+
+        function displayRecipe() {
+            document.getElementById('recipeName').textContent = recipe.name || 'Recipe';
+            document.getElementById('recipeDesc').textContent = recipe.description || '--';
+            document.getElementById('cuisine').textContent = recipe.cuisine || '--';
+            document.getElementById('course').textContent = recipe.course || '--';
+            document.getElementById('ingredList').innerHTML = (recipe.ingredients || []).map(ing => `<li>${ing}</li>`).join('');
+            displaySteps();
+            currentStep = 0;
+            updateActive();
+        }
+
+        function displaySteps() {
+            let html = '';
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                const timerHtml = step.timers && step.timers.length > 0 
+                    ? `<div class="timer-section">
+                        <div class="timer-time">⏱ ${Math.round(step.timers[0])} min</div>
+                        <div class="timer-display" id="timerDisplay${i}"></div>
+                        <div class="timer-controls">
+                            <button class="timer-btn btn-start" onclick="startTimer(${i}); event.stopPropagation();">Start</button>
+                            <button class="timer-btn btn-pause" onclick="pauseTimer(${i}); event.stopPropagation();">Pause</button>
+                            <button class="timer-btn btn-stop" onclick="stopTimer(${i}); event.stopPropagation();">Stop</button>
+                        </div>
+                      </div>`
+                    : '';
+                
+                html += `<div class="step" data-idx="${i}" onclick="goToStep(${i})">
+                    <span class="step-number">${i + 1}</span>
+                    <span class="step-text">${step.text}</span>
+                    ${timerHtml}
+                </div>`;
+            }
+            document.getElementById('stepsContainer').innerHTML = html;
+        }
+
+        function updateActive() {
+            document.querySelectorAll('.step').forEach((el, i) => {
+                el.classList.remove('active', 'done');
+                if (i === currentStep) {
+                    el.classList.add('active');
+                    updateAvatarMsg(steps[i].text);
+                } else if (i < currentStep) {
+                    el.classList.add('done');
+                }
+            });
+        }
+
+        function updateAvatarMsg(text) {
+            const msgBox = document.getElementById('avatarMsg');
+            if (msgBox) {
+                msgBox.textContent = text.substring(0, 150);
+            }
+        }
+
+        function startTimer(stepIdx) {
+            if (!steps[stepIdx].timers.length) return;
+            stopTimer(stepIdx);
+            
+            let remaining = steps[stepIdx].timers[0] * 60; // Convert to seconds
+            const display = document.getElementById('timerDisplay' + stepIdx);
+            
+            const interval = setInterval(() => {
+                remaining--;
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+                display.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    display.textContent = '✓ Done!';
+                    updateAvatarMsg('Timer finished! Ready for the next step?');
+                    setTimeout(() => nextStep(), 3000);
+                }
+            }, 1000);
+            
+            timers[stepIdx] = interval;
+        }
+
+        function pauseTimer(stepIdx) {
+            if (timers[stepIdx]) {
+                clearInterval(timers[stepIdx]);
+                timers[stepIdx] = null;
+            }
+        }
+
+        function stopTimer(stepIdx) {
+            pauseTimer(stepIdx);
+            const display = document.getElementById('timerDisplay' + stepIdx);
+            if (display) display.textContent = '';
+        }
+
+        function nextStep() {
+            if (currentStep < steps.length - 1) {
+                currentStep++;
+                updateActive();
+                document.querySelectorAll('.step')[currentStep].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                updateActive();
+                document.querySelectorAll('.step')[currentStep].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function goToStep(idx) {
+            currentStep = idx;
+            updateActive();
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            initAvatar();
+            loadRecipe();
+        });
+    </script>
+</body>
+</html>

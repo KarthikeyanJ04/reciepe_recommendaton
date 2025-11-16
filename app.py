@@ -18,11 +18,11 @@ DB_FILE = 'recipes.db'
 MODELS_FILE = 'recipe_models.pkl'
 
 print("=" * 60)
-print("🚀 AI Recipe Finder (Chunk-based)")
+print("AI Recipe Finder (Chunk-based)")
 print("=" * 60)
 
 # Load metadata
-print("\n📥 Loading models...")
+print("\nLoading models...")
 with open(MODELS_FILE, 'rb') as f:
     models = pickle.load(f)
 
@@ -50,14 +50,17 @@ else:
     first_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_0.npz')
     chunk_size = first_chunk.shape[0]
     
-    print(f"⚠️  Auto-detected {num_chunks} chunks (indices 0-{max(chunk_indices)})")
+    print(f"Auto-detected {num_chunks} chunks (indices 0-{max(chunk_indices)})")
 
 
-print(f"\n✅ Loaded metadata for {len(recipe_ids):,} recipes")
+print(f"\nLoaded metadata for {len(recipe_ids):,} recipes")
 print(f"   Chunks: {num_chunks} x ~{chunk_size:,} recipes")
 
 # Initialize embedding model
+print("\nLoading embedding model (this may take 30-60 seconds on first run)...")
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+print("Embedding model loaded!")
+
 
 def _normalize_instruction(step):
     """Normalize a single instruction string."""
@@ -223,33 +226,43 @@ def search():
 def cook_with_ai():
     """Parse recipe and extract timers"""
     try:
+        print("\n[cook-with-ai] Received request")
         data = request.json
+        print(f"[cook-with-ai] Data: {data}")
         recipe_id = data.get('recipe_id')
+        print(f"[cook-with-ai] Recipe ID: {recipe_id}")
         
         recipe = get_recipe_by_id(recipe_id)
+        print(f"[cook-with-ai] Recipe fetched: {recipe is not None}")
         if not recipe:
             return jsonify({'success': False, 'error': 'Recipe not found'})
         
         # Parse instructions for timers
         parsed_steps = []
-        for i, instruction in enumerate(recipe['instructions']):
-            # Extract time patterns
-            time_patterns = [
-                r'(\d+)\s*(?:minutes?|mins?)',
-                r'(\d+)\s*(?:hours?|hrs?)',
-                r'(\d+)\s*(?:seconds?|secs?)'
-            ]
+        instructions = recipe.get('instructions', [])
+        print(f"[cook-with-ai] Instructions count: {len(instructions)}")
+        
+        for i, instruction in enumerate(instructions):
+            if not isinstance(instruction, str):
+                instruction = str(instruction)
             
+            # Extract time patterns
             timers = []
-            for pattern in time_patterns:
-                matches = re.findall(pattern, instruction, re.IGNORECASE)
-                for match in matches:
-                    duration = int(match)
-                    if 'hour' in pattern or 'hr' in pattern:
-                        duration *= 60  # Convert to minutes
-                    elif 'sec' in pattern:
-                        duration = duration / 60  # Convert to minutes
-                    timers.append(duration)
+            
+            # Check for minutes
+            minute_matches = re.findall(r'(\d+)\s*(?:minutes?|mins?)', instruction, re.IGNORECASE)
+            for match in minute_matches:
+                timers.append(int(match))
+            
+            # Check for hours
+            hour_matches = re.findall(r'(\d+)\s*(?:hours?|hrs?)', instruction, re.IGNORECASE)
+            for match in hour_matches:
+                timers.append(int(match) * 60)  # Convert to minutes
+            
+            # Check for seconds
+            second_matches = re.findall(r'(\d+)\s*(?:seconds?|secs?)', instruction, re.IGNORECASE)
+            for match in second_matches:
+                timers.append(int(match) / 60.0)  # Convert to minutes
             
             parsed_steps.append({
                 'step_number': i + 1,
@@ -258,6 +271,7 @@ def cook_with_ai():
                 'has_timer': len(timers) > 0
             })
         
+        print(f"[cook-with-ai] Parsed {len(parsed_steps)} steps")
         return jsonify({
             'success': True,
             'recipe': recipe,
@@ -265,11 +279,14 @@ def cook_with_ai():
         })
         
     except Exception as e:
+        print(f"[cook-with-ai] ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == "__main__":
     print("\nStarting server on http://localhost:5000\n")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
 
 
