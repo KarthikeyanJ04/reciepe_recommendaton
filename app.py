@@ -390,19 +390,21 @@ def cook_with_ai():
         if not db_recipe:
             return jsonify({'success': False, 'error': 'Recipe not found'})
         
-        recipe = db_recipe
-        
-        # If Ollama is available, enhance the recipe with AI
-        if llm == "ollama":
-            print(f"[cook-with-ai] Enhancing recipe with AI: {db_recipe['name']}")
-            try:
-                import requests
-                
-                # Create a prompt that uses the DB recipe as inspiration
-                db_ingredients = '\n'.join(db_recipe.get('ingredients', [])[:15])
-                db_instructions = '\n'.join(db_recipe.get('instructions', [])[:5])
-                
-                prompt = f"""You are a professional chef. Here's a recipe from a database:
+        # If Ollama is NOT available, return error
+        if llm != "ollama":
+            print("[cook-with-ai] Ollama not available, returning error.")
+            return jsonify({'success': False, 'error': 'AI recipe generator is not available.'})
+
+        # Ollama is available, so proceed with AI generation.
+        print(f"[cook-with-ai] Enhancing recipe with AI: {db_recipe['name']}")
+        try:
+            import requests
+            
+            # Create a prompt that uses the DB recipe as inspiration
+            db_ingredients = '\n'.join(db_recipe.get('ingredients', [])[:15])
+            db_instructions = '\n'.join(db_recipe.get('instructions', [])[:5])
+            
+            prompt = f"""You are a professional chef. Here's a recipe from a database:
 
 Recipe: {db_recipe['name']}
 Database Ingredients:
@@ -423,34 +425,40 @@ Instructions: [step 1. detailed instruction with time | step 2. ... | ...]
 
 Make it professional and detailed."""
 
-                resp = requests.post('http://localhost:11434/api/generate', json={
-                    'model': 'mistral',
-                    'prompt': prompt,
-                    'stream': False,
-                    'temperature': 0.4,
-                }, timeout=60)
-                
-                if resp.status_code == 200:
-                    result = resp.json()
-                    llm_output = result.get('response', '').strip()
-                    print(f"[cook-with-ai] AI enhanced recipe")
-                    
-                    # Parse AI-enhanced recipe
-                    enhanced_recipe = _parse_mistral_recipe(llm_output, db_recipe['name'])
-                    if enhanced_recipe and enhanced_recipe.get('ingredients'):
-                        # Use AI version but keep DB metadata
-                        recipe = {
-                            **db_recipe,
-                            'name': enhanced_recipe.get('name', db_recipe['name']),
-                            'ingredients': enhanced_recipe.get('ingredients', db_recipe.get('ingredients', [])),
-                            'instructions': enhanced_recipe.get('instructions', db_recipe.get('instructions', [])),
-                            'description': f"AI-Enhanced: {db_recipe.get('description', '')}"
-                        }
-                        print(f"[cook-with-ai] Used AI version with {len(recipe['ingredients'])} ingredients")
-            except Exception as e:
-                print(f"[cook-with-ai] AI enhancement failed: {e}, using DB recipe")
-                # Fall back to DB recipe if AI fails
-                recipe = db_recipe
+            resp = requests.post('http://localhost:11434/api/generate', json={
+                'model': 'mistral',
+                'prompt': prompt,
+                'stream': False,
+                'temperature': 0.4,
+            }, timeout=60)
+            
+            if resp.status_code != 200:
+                print(f"[cook-with-ai] AI enhancement failed: LLM returned status {resp.status_code}")
+                return jsonify({'success': False, 'error': 'Failed to generate AI recipe.'})
+
+            result = resp.json()
+            llm_output = result.get('response', '').strip()
+            print(f"[cook-with-ai] AI enhanced recipe")
+            
+            # Parse AI-enhanced recipe
+            enhanced_recipe = _parse_mistral_recipe(llm_output, db_recipe['name'])
+            if not enhanced_recipe or not enhanced_recipe.get('ingredients'):
+                print(f"[cook-with-ai] AI enhancement failed: Parsing failed.")
+                return jsonify({'success': False, 'error': 'Failed to parse AI recipe.'})
+
+            # Use AI version but keep DB metadata
+            recipe = {
+                **db_recipe,
+                'name': enhanced_recipe.get('name', db_recipe['name']),
+                'ingredients': enhanced_recipe.get('ingredients', []),
+                'instructions': enhanced_recipe.get('instructions', []),
+                'description': f"AI-Enhanced: {db_recipe.get('description', '')}"
+            }
+            print(f"[cook-with-ai] Used AI version with {len(recipe['ingredients'])} ingredients")
+
+        except Exception as e:
+            print(f"[cook-with-ai] AI enhancement failed: {e}")
+            return jsonify({'success': False, 'error': 'AI recipe generation failed.'})
         
         # Parse instructions for timers
         parsed_steps = []

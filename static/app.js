@@ -132,7 +132,7 @@ async function searchRecipes(){
   }
 }
 
-function displayResults(recipes){
+async function displayResults(recipes){
   const results = document.getElementById('results');
   if(!results) return;
 
@@ -160,9 +160,9 @@ function displayResults(recipes){
   `).join('');
 
   // Now fetch AI-generated details for each recipe, passing recipe_id from DB
-  recipes.forEach(recipe => {
-    fetchRecipeDetails(recipe.id, recipe.name);
-  });
+  for (const recipe of recipes) {
+    await fetchRecipeDetails(recipe.id, recipe.name);
+  }
 }
 
 async function fetchRecipeDetails(recipeId, dishName){
