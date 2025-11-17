@@ -120,7 +120,7 @@ async function searchRecipes(){
     });
     const data = await response.json();
     if(data.success){
-      displayResults(data.recipes);
+      displayResults(data.recipes, query);
     } else {
       if(results) results.innerHTML = `<div class="no-results">${escapeHtml(data.message || 'No recipes found')}</div>`;
     }
@@ -132,7 +132,7 @@ async function searchRecipes(){
   }
 }
 
-async function displayResults(recipes){
+async function displayResults(recipes, query){
   const results = document.getElementById('results');
   if(!results) return;
 
@@ -161,17 +161,18 @@ async function displayResults(recipes){
 
   // Now fetch AI-generated details for each recipe, passing recipe_id from DB
   for (const recipe of recipes) {
-    await fetchRecipeDetails(recipe.id, recipe.name);
+    await fetchRecipeDetails(recipe.id, recipe.name, query);
   }
 }
 
-async function fetchRecipeDetails(recipeId, dishName){
+async function fetchRecipeDetails(recipeId, dishName, query){
   try {
     const response = await fetch('/cook-with-ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        recipe_id: recipeId
+        recipe_id: recipeId,
+        query: query
       })
     });
     const data = await response.json();
@@ -185,7 +186,7 @@ async function fetchRecipeDetails(recipeId, dishName){
         from_db: true
       });
     } else {
-      updateRecipeCardError(recipeId, 'Failed to load recipe');
+      updateRecipeCardError(recipeId, data.error || 'Failed to load recipe');
     }
   } catch(e) {
     console.error('Error fetching recipe details:', e);

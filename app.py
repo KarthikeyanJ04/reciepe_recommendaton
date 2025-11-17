@@ -379,6 +379,7 @@ def cook_with_ai():
         data = request.json
         print(f"[cook-with-ai] Data: {data}")
         recipe_id = data.get('recipe_id')
+        user_ingredients_query = data.get('query', '')
         
         if not recipe_id:
             return jsonify({'success': False, 'error': 'Recipe ID required'})
@@ -400,30 +401,25 @@ def cook_with_ai():
         try:
             import requests
             
-            # Create a prompt that uses the DB recipe as inspiration
-            db_ingredients = '\n'.join(db_recipe.get('ingredients', [])[:15])
-            db_instructions = '\n'.join(db_recipe.get('instructions', [])[:5])
-            
-            prompt = f"""You are a professional chef. Here's a recipe from a database:
+            prompt = f"""You are a creative chef who is an expert at making delicious meals with limited ingredients.
 
-Recipe: {db_recipe['name']}
-Database Ingredients:
-{db_ingredients}
+A user has the following ingredients: {user_ingredients_query}
+They want to make a dish called: "{db_recipe['name']}"
 
-Database Instructions:
-{db_instructions}
+Your task is to create a recipe for "{db_recipe['name']}" that **heavily prioritizes using the ingredients the user already has**.
 
-Now, using this as inspiration, create an ENHANCED version with:
-1. Better, more detailed ingredients with quantities (e.g., "2 cups flour", "1 tbsp salt")
-2. Clearer, step-by-step instructions (8-12 detailed steps)
-3. Cooking times for each step where applicable
+Follow these rules:
+1.  **Use as many of the user's ingredients as possible.**
+2.  Only add a few essential extra ingredients (like oil, salt, pepper, or water) if absolutely necessary to make the dish work. Do NOT add new primary ingredients.
+3.  Provide clear, step-by-step instructions.
+4.  Provide quantities for all ingredients.
 
 Format your response EXACTLY like this (use | to separate):
 Name: [dish name]
 Ingredients: [ingredient1 with quantity | ingredient2 with quantity | ...]
-Instructions: [step 1. detailed instruction with time | step 2. ... | ...]
+Instructions: [step 1. detailed instruction | step 2. ... | ...]
 
-Make it professional and detailed."""
+Create the best possible recipe for "{db_recipe['name']}" using mainly "{user_ingredients_query}"."""
 
             resp = requests.post('http://localhost:11434/api/generate', json={
                 'model': 'mistral',
@@ -452,7 +448,7 @@ Make it professional and detailed."""
                 'name': enhanced_recipe.get('name', db_recipe['name']),
                 'ingredients': enhanced_recipe.get('ingredients', []),
                 'instructions': enhanced_recipe.get('instructions', []),
-                'description': f"AI-Enhanced: {db_recipe.get('description', '')}"
+                'description': f"AI-Enhanced recipe based on your ingredients."
             }
             print(f"[cook-with-ai] Used AI version with {len(recipe['ingredients'])} ingredients")
 
