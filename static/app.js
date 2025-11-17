@@ -249,5 +249,5 @@ function updateRecipeCardError(recipeId, error){
 }
 
 function openCookingAssistant(recipeId) {
-  window.open(`/cooking-assistant?recipe_id=${recipeId}`, 'cooking_window', 'width=1000,height=800');
+  window.location.href = `/cooking-assistant?recipe_id=${recipeId}`;
 }
