@@ -141,38 +141,111 @@ function displayResults(recipes){
     return;
   }
 
+  // Create cards with loading state
   results.innerHTML = recipes.map(recipe => `
-    <div class="recipe-card">
+    <div class="recipe-card" id="card-${recipe.id}">
       <div class="recipe-header">
         <h2 class="recipe-title">${escapeHtml(recipe.name)}</h2>
         <div class="recipe-meta">
-          <span> ${escapeHtml(recipe.course || 'Main Course')}</span>
+          <span>Loading details...</span>
         </div>
-        ${recipe.description ? `<div class="recipe-description">${escapeHtml(recipe.description)}</div>` : ''}
       </div>
       <div class="recipe-body">
-        <div class="ingredients-section">
-          <h3 class="section-title">Ingredients</h3>
-          <div class="ingredients-list">
-            ${ (recipe.ingredients||[]).map(ing => `<div class="ingredient-item"> ${escapeHtml(ing)}</div>`).join('') }
-          </div>
-        </div>
-
-        <div class="instructions-section">
-          <h3 class="section-title">Instructions</h3>
-          <div class="instructions-list">
-            ${ renderInstructions(recipe) }
-          </div>
-        </div>
-        
-        <div class="recipe-actions">
-          <button class="cook-ai-btn" onclick="openCookingAssistant(${recipe.id})">
-            👨‍🍳 Cook with AI Assistant
-          </button>
+        <div style="text-align:center;padding:20px;color:#999;">
+          <div class="spinner"></div>
+          <p>Generating recipe with AI...</p>
         </div>
       </div>
     </div>
   `).join('');
+
+  // Now fetch AI-generated details for each recipe, passing recipe_id from DB
+  recipes.forEach(recipe => {
+    fetchRecipeDetails(recipe.id, recipe.name);
+  });
+}
+
+async function fetchRecipeDetails(recipeId, dishName){
+  try {
+    const response = await fetch('/cook-with-ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        recipe_id: recipeId
+      })
+    });
+    const data = await response.json();
+    
+    if(data.success && data.recipe){
+      updateRecipeCard(recipeId, {
+        name: data.recipe.name,
+        ingredients: data.recipe.ingredients || [],
+        description: data.recipe.description || '',
+        instructions: data.recipe.instructions || [],
+        from_db: true
+      });
+    } else {
+      updateRecipeCardError(recipeId, 'Failed to load recipe');
+    }
+  } catch(e) {
+    console.error('Error fetching recipe details:', e);
+    updateRecipeCardError(recipeId, 'Error loading recipe');
+  }
+}
+
+function updateRecipeCard(recipeId, details){
+  const card = document.getElementById(`card-${recipeId}`);
+  if(!card) return;
+
+  const sourceLabel = details.from_db ? 'DB + AI Enhanced' : 'AI Generated';
+
+  card.innerHTML = `
+    <div class="recipe-header">
+      <h2 class="recipe-title">${escapeHtml(details.name)}</h2>
+      <div class="recipe-meta">
+        <span>${sourceLabel} Recipe</span>
+      </div>
+      ${details.description ? `<div class="recipe-description">${escapeHtml(details.description)}</div>` : ''}
+    </div>
+    <div class="recipe-body">
+      <div class="ingredients-section">
+        <h3 class="section-title">Ingredients</h3>
+        <div class="ingredients-list">
+          ${details.ingredients.map(ing => `<div class="ingredient-item">✓ ${escapeHtml(ing)}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="instructions-section">
+        <h3 class="section-title">Cooking Steps</h3>
+        <div class="instructions-list">
+          ${details.instructions.map((step, idx) => `
+            <div class="instruction-step">
+              <strong>Step ${idx + 1}:</strong> ${escapeHtml(step).replace(/\n/g, '<br>')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="recipe-actions">
+        <button class="cook-ai-btn" onclick="openCookingAssistant(${recipeId})">
+          👨‍🍳 Cook with AI Assistant
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function updateRecipeCardError(recipeId, error){
+  const card = document.getElementById(`card-${recipeId}`);
+  if(!card) return;
+
+  card.innerHTML = `
+    <div class="recipe-body">
+      <div style="color:#e74c3c;padding:20px;text-align:center;">
+        <p>${escapeHtml(error)}</p>
+      </div>
+    </div>
+  `;
 }
 
 function openCookingAssistant(recipeId) {

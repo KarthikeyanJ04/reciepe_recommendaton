@@ -1,0 +1,19 @@
+============================================================
+AI Recipe Finder (Chunk-based)
+============================================================
+
+Loading models...
+
+Loaded metadata for 2,236,367 recipes
+   Chunks: 45 x ~50,000 recipes
+
+Loading embedding model (this may take 30-60 seconds on first run)...
+Embedding model loaded!
+
+[INFO] Ollama detected. Using Ollama for local LLM inference.
+   Ensure 'ollama run mistral' is running in another terminal.
+
+Starting server on http://localhost:5000
+
+ * Serving Flask app 'app'
+ * Debug mode: off
