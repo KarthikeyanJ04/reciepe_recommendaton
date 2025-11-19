@@ -3,174 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Cooking Assistant</title>
+    <title>Focus Mode</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
     <style>
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; padding: 20px; margin: 0; }
-        .cooking-assistant { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
-        .ai-avatar { text-align: center; margin-bottom: 30px; }
-        .avatar-image { font-size: 80px; margin: 20px 0; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        .avatar-speaking { animation: speak 0.5s; }
-        @keyframes speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-        h2 { color: #333; margin: 10px 0; }
-        .speech-bubble { background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #667eea; min-height: 60px; line-height: 1.5; }
-        .timer-display { text-align: center; font-size: 60px; font-weight: bold; color: #ff6b6b; margin: 20px 0; display: none; font-family: monospace; }
-        .timer-display.active { display: block; }
-        .step-item { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 3px solid #ddd; opacity: 0.6; transition: 0.3s; }
-        .step-item.active { background: #e8f0ff; border-left-color: #667eea; opacity: 1; }
-        .step-number { font-weight: bold; color: #667eea; margin-bottom: 5px; }
-        .timer-badge { display: inline-block; background: #ff6b6b; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; margin-top: 5px; }
-        .controls { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
-        .control-btn { padding: 12px 25px; border: none; border-radius: 20px; font-size: 15px; cursor: pointer; background: linear-gradient(135deg, #667eea, #764ba2); color: white; transition: 0.3s; }
-        .control-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
-        .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .recipe-title { font-size: 24px; font-weight: bold; color: #333; text-align: center; margin: 15px 0; }
-        .loading { text-align: center; padding: 40px; color: #667eea; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        :root { --bg: #000; --text: #fff; --accent: #333; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .status-bar {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+        .dot { width: 40px; height: 4px; background: #333; border-radius: 2px; transition: 0.3s; }
+        .dot.active { background: #fff; box-shadow: 0 0 10px #fff; }
+
+        .main-stage {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 40px; letter-spacing: -0.03em; }
+        
+        .instruction-card {
+            font-size: 1.8rem;
+            line-height: 1.4;
+            font-weight: 600;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .timer {
+            font-size: 4rem;
+            font-variant-numeric: tabular-nums;
+            font-weight: 800;
+            margin: 20px 0;
+            display: none;
+        }
+        .timer.active { display: block; }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 20px 40px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            flex: 1;
+            max-width: 200px;
+        }
+        button:active { transform: scale(0.95); }
+        button.secondary { background: #333; color: #fff; }
+
+        /* Pulse animation for voice */
+        .speaking-indicator {
+            width: 10px; height: 10px; background: red; border-radius: 50%;
+            position: fixed; top: 30px; right: 30px; display: none;
+        }
     </style>
 </head>
 <body>
-    <div class="cooking-assistant">
-        <div class="ai-avatar">
-            <!-- visible emoji avatar (falls back to emoji if images unavailable) -->
-            <div class="avatar-image" id="avatar">👨‍🍳</div>
-            <h2>Chef AI</h2>
+    <div class="speaking-indicator" id="speakingDot"></div>
+    <div class="status-bar" id="progressBar"></div>
+
+    <div class="main-stage" id="stage">
+        <h1 id="recipeTitle">Loading...</h1>
+        
+        <div class="instruction-card" id="instructionText">
+            Preparing your session...
         </div>
-        <div id="loadingIndicator" class="loading" style="display: none;">
-            <div>Loading recipe...</div>
-            <div class="spinner"></div>
-        </div>
-        <div id="contentArea" style="display: none;">
-            <h1 class="recipe-title" id="recipeTitle">Recipe Name</h1>
-            <div class="speech-bubble" id="speechBubble">
-                <p id="avatarSpeech">Hi! I'm your AI cooking assistant. Ready to cook?</p>
-            </div>
-            <div class="timer-display" id="timerDisplay">
-                <span id="timerValue">00:00</span>
-            </div>
-            <div id="stepsContainer"></div>
-            <div class="controls">
-                <button class="control-btn" id="startBtn" onclick="startCooking()">Start Cooking</button>
-                <button class="control-btn" id="nextBtn" onclick="nextStep()" disabled>Next Step</button>
-                <button class="control-btn" id="pauseBtn" onclick="pauseTimer()" disabled style="display: none;">Pause Timer</button>
-            </div>
+
+        <div class="timer" id="timerDisplay">00:00</div>
+
+        <div class="controls">
+            <button id="actionBtn" onclick="startCooking()">Start</button>
+            <button id="secBtn" class="secondary" onclick="secondaryAction()" style="display:none">Pause</button>
         </div>
     </div>
+
     <script>
-        let currentStep = 0, steps = [], timerInterval = null, remainingSeconds = 0, isPaused = false;
+        // Minimal Logic for Focus Mode
+        let steps = [], currentStep = -1, timerInterval, timeLeft, isPaused = false;
         
         function speak(text) {
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 0.9;
-                window.speechSynthesis.speak(utterance);
-                const avatar = document.getElementById('avatar');
-                avatar.classList.add('avatar-speaking');
-                setTimeout(() => avatar.classList.remove('avatar-speaking'), Math.min(text.length * 40, 3000));
+            window.speechSynthesis.cancel();
+            let u = new SpeechSynthesisUtterance(text);
+            document.getElementById('speakingDot').style.display = 'block';
+            u.onend = () => document.getElementById('speakingDot').style.display = 'none';
+            window.speechSynthesis.speak(u);
+        }
+
+        async function load() {
+            const id = new URLSearchParams(location.search).get('recipe_id');
+            const res = await fetch('/cook-with-ai', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({recipe_id: id})
+            });
+            const data = await res.json();
+            if(data.success) {
+                steps = data.parsed_steps;
+                document.getElementById('recipeTitle').innerText = data.recipe.name;
+                document.getElementById('instructionText').innerText = "Ready to cook?";
+                renderProgress(steps.length);
+                speak(`Ready to cook ${data.recipe.name}?`);
             }
         }
-        
-        async function loadRecipe(recipeId) {
-            document.getElementById('loadingIndicator').style.display = 'block';
-            document.getElementById('contentArea').style.display = 'none';
-            try {
-                const response = await fetch('/cook-with-ai', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({recipe_id: parseInt(recipeId)})
-                });
-                const data = await response.json();
-                if (data.success) {
-                    steps = data.parsed_steps;
-                    document.getElementById('recipeTitle').textContent = data.recipe.name;
-                    displaySteps();
-                    document.getElementById('loadingIndicator').style.display = 'none';
-                    document.getElementById('contentArea').style.display = 'block';
-                    speak(`Great! Let's cook ${data.recipe.name}. I'll guide you through ${steps.length} steps.`);
-                } else {
-                    alert('Error loading recipe');
-                }
-            } catch (e) {
-                console.error(e);
-                alert('Error: ' + e.message);
-            }
+
+        function renderProgress(total) {
+            document.getElementById('progressBar').innerHTML = Array(total).fill('<div class="dot"></div>').join('');
         }
-        
-        function displaySteps() {
-            const container = document.getElementById('stepsContainer');
-            container.innerHTML = steps.map((s, i) => `
-                <div class="step-item" id="step-${i}">
-                    <div class="step-number">Step ${s.step_number}</div>
-                    <div>${s.text}</div>
-                    ${s.has_timer && s.timers.length > 0 ? `<div class="timer-badge"> ${s.timers[0]} min</div>` : ''}
-                </div>
-            `).join('');
+
+        function updateProgress(idx) {
+            document.querySelectorAll('.dot').forEach((d, i) => {
+                d.classList.toggle('active', i <= idx);
+            });
         }
-        
+
         function startCooking() {
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('nextBtn').disabled = false;
             currentStep = 0;
-            nextStep();
+            document.getElementById('actionBtn').onclick = nextStep;
+            document.getElementById('actionBtn').innerText = "Next";
+            showStep();
         }
-        
-        function nextStep() {
-            if (currentStep >= steps.length) {
-                speak("Congratulations! Your dish is ready!");
-                document.getElementById('avatarSpeech').textContent = "Dish ready! Enjoy!";
+
+        function showStep() {
+            if(currentStep >= steps.length) {
+                document.getElementById('instructionText').innerText = "Enjoy your meal!";
+                document.getElementById('actionBtn').style.display = 'none';
+                speak("All done. Enjoy!");
                 return;
             }
-            document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`step-${currentStep}`).classList.add('active');
-            const step = steps[currentStep];
-            document.getElementById('avatarSpeech').textContent = step.text;
-            speak(step.text);
-            if (step.has_timer && step.timers.length > 0) {
-                startTimer(step.timers[0]);
+            
+            updateProgress(currentStep);
+            const s = steps[currentStep];
+            document.getElementById('instructionText').innerText = s.text;
+            speak(s.text);
+
+            if(s.has_timer && s.timers.length) {
+                startTimer(s.timers[0]);
             } else {
-                currentStep++;
+                document.getElementById('timerDisplay').classList.remove('active');
+                document.getElementById('secBtn').style.display = 'none';
             }
         }
-        
-        function startTimer(m) {
-            remainingSeconds = m * 60;
+
+        function nextStep() {
+            clearInterval(timerInterval);
+            currentStep++;
+            showStep();
+        }
+
+        function startTimer(mins) {
+            timeLeft = mins * 60;
             document.getElementById('timerDisplay').classList.add('active');
-            document.getElementById('pauseBtn').style.display = 'inline-block';
-            document.getElementById('nextBtn').disabled = true;
-            speak(`Starting ${m} minute timer`);
+            document.getElementById('secBtn').style.display = 'block';
+            document.getElementById('secBtn').onclick = toggleTimer;
+            updateTimerDisplay();
             timerInterval = setInterval(() => {
-                if (!isPaused) {
-                    remainingSeconds--;
-                    const mins = Math.floor(remainingSeconds / 60);
-                    const secs = remainingSeconds % 60;
-                    document.getElementById('timerValue').textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-                    if (remainingSeconds <= 0) {
-                        clearInterval(timerInterval);
-                        document.getElementById('timerDisplay').classList.remove('active');
-                        document.getElementById('pauseBtn').style.display = 'none';
-                        document.getElementById('nextBtn').disabled = false;
-                        speak("Timer finished!");
-                        new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE=').play();
-                        currentStep++;
-                    }
+                if(!isPaused) {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if(timeLeft <= 0) nextStep();
                 }
             }, 1000);
         }
-        
-        function pauseTimer() {
+
+        function updateTimerDisplay() {
+            const m = Math.floor(timeLeft/60);
+            const s = timeLeft%60;
+            document.getElementById('timerDisplay').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function toggleTimer() {
             isPaused = !isPaused;
-            document.getElementById('pauseBtn').textContent = isPaused ? 'Resume' : 'Pause';
+            document.getElementById('secBtn').innerText = isPaused ? "Resume" : "Pause";
         }
-        
-        const recipeId = new URLSearchParams(window.location.search).get('recipe_id');
-        if (recipeId) {
-            loadRecipe(recipeId);
-        } else {
-            document.getElementById('loadingIndicator').style.display = 'none';
-            document.getElementById('contentArea').style.display = 'block';
-            document.getElementById('avatarSpeech').textContent = "No recipe selected!";
-        }
+
+        load();
     </script>
 </body>
 </html>
