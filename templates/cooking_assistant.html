@@ -4,11 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Focus Mode</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&display=swap">
     <style>
-        :root { --bg: #000; --text: #fff; --accent: #333; }
+        :root {
+            --bg: #ffffff;
+            --text: #111111;
+            --accent: #000000;
+            --glass: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+        }
+
         body {
             background: var(--bg);
+            background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f4f4f5 100%);
             color: var(--text);
             font-family: 'Inter', sans-serif;
             display: flex;
@@ -19,122 +28,384 @@
             margin: 0;
             padding: 20px;
             text-align: center;
+            overflow-x: hidden;
         }
 
+        /* --- AVATAR CONTAINER --- */
+        #avatar-container {
+            width: 340px;
+            height: 340px;
+            margin: 0 auto 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.1));
+        }
+
+        /* --- UI ELEMENTS --- */
         .status-bar {
             position: fixed;
-            top: 20px;
+            top: 30px;
             left: 0;
             right: 0;
             display: flex;
             justify-content: center;
-            gap: 5px;
+            gap: 6px;
+            z-index: 10;
         }
-        .dot { width: 40px; height: 4px; background: #333; border-radius: 2px; transition: 0.3s; }
-        .dot.active { background: #fff; box-shadow: 0 0 10px #fff; }
+        .dot { 
+            width: 30px; 
+            height: 3px; 
+            background: #e0e0e0; 
+            border-radius: 4px; 
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); 
+        }
+        .dot.active { 
+            background: var(--accent); 
+            width: 50px; 
+        }
 
         .main-stage {
             max-width: 600px;
             width: 100%;
+            z-index: 2;
+            position: relative;
         }
 
-        h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 40px; letter-spacing: -0.03em; }
+        h1 { 
+            font-size: 2.2rem; 
+            font-weight: 800; 
+            margin-bottom: 10px; 
+            letter-spacing: -0.03em; 
+            color: var(--text);
+        }
         
         .instruction-card {
-            font-size: 1.8rem;
-            line-height: 1.4;
-            font-weight: 600;
-            min-height: 200px;
+            font-size: 1.4rem;
+            line-height: 1.6;
+            font-weight: 500;
+            min-height: 150px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 40px;
+            padding: 40px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: transform 0.3s ease;
         }
+        
+        .instruction-card:hover { transform: translateY(-5px); }
 
         .timer {
-            font-size: 4rem;
+            font-size: 5rem;
             font-variant-numeric: tabular-nums;
             font-weight: 800;
-            margin: 20px 0;
+            margin: 20px 0 40px 0;
             display: none;
+            color: var(--accent);
+            letter-spacing: -2px;
         }
-        .timer.active { display: block; }
+        .timer.active { display: block; animation: fadeIn 0.5s ease; }
 
         .controls {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             justify-content: center;
             width: 100%;
         }
 
         button {
-            background: #fff;
-            color: #000;
+            background: var(--accent);
+            color: #fff;
             border: none;
             padding: 20px 40px;
-            font-size: 1.2rem;
-            font-weight: 700;
-            border-radius: 50px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border-radius: 100px;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             flex: 1;
             max-width: 200px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
-        button:active { transform: scale(0.95); }
-        button.secondary { background: #333; color: #fff; }
+        
+        button:hover { transform: scale(1.03); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
+        button:active { transform: scale(0.98); }
+        
+        button.secondary { 
+            background: #fff; 
+            color: var(--text); 
+            border: 1px solid #e5e5e5; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.03);
+        }
+        button.secondary:hover { border-color: #000; }
 
-        /* Pulse animation for voice */
-        .speaking-indicator {
-            width: 10px; height: 10px; background: red; border-radius: 50%;
-            position: fixed; top: 30px; right: 30px; display: none;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
     </style>
 </head>
 <body>
-    <div class="speaking-indicator" id="speakingDot"></div>
     <div class="status-bar" id="progressBar"></div>
+
+    <div id="avatar-container">
+        <canvas id="avatarCanvas"></canvas>
+    </div>
 
     <div class="main-stage" id="stage">
         <h1 id="recipeTitle">Loading...</h1>
         
         <div class="instruction-card" id="instructionText">
-            Preparing your session...
+            Preparing your kitchen...
         </div>
 
         <div class="timer" id="timerDisplay">00:00</div>
 
         <div class="controls">
-            <button id="actionBtn" onclick="startCooking()">Start</button>
-            <button id="secBtn" class="secondary" onclick="secondaryAction()" style="display:none">Pause</button>
+            <button id="actionBtn">Start Cooking</button>
+            <button id="secBtn" class="secondary" style="display:none">Pause</button>
         </div>
     </div>
 
     <script>
-        // Minimal Logic for Focus Mode
-        let steps = [], currentStep = -1, timerInterval, timeLeft, isPaused = false;
+    // Wrap everything in a function to prevent global scope pollution
+    (function() {
+        /**
+         * HIGH FIDELITY 2D VECTOR ENGINE
+         */
+        const canvas = document.getElementById('avatarCanvas');
+        const ctx = canvas.getContext('2d');
         
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        let time = 0;
+        let isSpeaking = false;
+        let blinkState = 0;
+        let blinkTimer = 0;
+        
+        // Colors localized
+        const Colors = {
+            skin: '#FFF0E5',
+            line: '#111111',
+            hair: '#1A1A1A',
+            white: '#FFFFFF',
+            shading: 'rgba(0,0,0,0.05)'
+        };
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            time += 0.03;
+            const breathe = Math.sin(time) * 3;
+            const hairSway = Math.sin(time * 1.5) * 2;
+            
+            const cx = rect.width / 2;
+            const cy = rect.height / 2 + 20 + breathe;
+
+            // 1. Back Hair
+            ctx.fillStyle = Colors.hair;
+            ctx.beginPath();
+            ctx.arc(cx, cy + 20, 95, Math.PI, 0, false); 
+            ctx.bezierCurveTo(cx + 95, cy + 140, cx - 95, cy + 140, cx - 95, cy + 20);
+            ctx.fill();
+
+            // 2. Neck
+            ctx.fillStyle = Colors.skin;
+            ctx.fillRect(cx - 15, cy + 60, 30, 40);
+            ctx.fillStyle = Colors.shading;
+            ctx.fillRect(cx - 15, cy + 60, 30, 10);
+
+            // 3. Clothing
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + 160, 60, 70, 0, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + 100, 25, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 4. Face
+            ctx.fillStyle = Colors.skin;
+            ctx.beginPath();
+            ctx.moveTo(cx - 55, cy - 20);
+            ctx.bezierCurveTo(cx - 55, cy + 60, cx - 20, cy + 90, cx, cy + 90);
+            ctx.bezierCurveTo(cx + 20, cy + 90, cx + 55, cy + 60, cx + 55, cy - 20);
+            ctx.bezierCurveTo(cx + 55, cy - 80, cx - 55, cy - 80, cx - 55, cy - 20);
+            ctx.fill();
+            
+            // 5. Eyes
+            updateBlink();
+            const eyeY = cy + 15;
+            const eyeSize = 14;
+            
+            function drawEye(x) {
+                if(blinkState === 2) {
+                    ctx.strokeStyle = Colors.line;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(x - 12, eyeY + 4);
+                    ctx.quadraticCurveTo(x, eyeY + 8, x + 12, eyeY + 4);
+                    ctx.stroke();
+                    return;
+                }
+                
+                ctx.fillStyle = Colors.white;
+                ctx.beginPath();
+                ctx.ellipse(x, eyeY, eyeSize, eyeSize * 0.8, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(x, eyeY, 8, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(x, eyeY, 4, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.fillStyle = Colors.white;
+                ctx.beginPath();
+                ctx.arc(x - 3, eyeY - 3, 2.5, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.strokeStyle = Colors.line;
+                ctx.lineWidth = 3.5;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x - 14, eyeY - 6);
+                ctx.quadraticCurveTo(x, eyeY - 10, x + 14, eyeY - 4);
+                ctx.stroke();
+            }
+
+            drawEye(cx - 28);
+            drawEye(cx + 28);
+
+            // 6. Mouth
+            ctx.fillStyle = '#C08080';
+            const mouthY = cy + 55;
+            
+            if (isSpeaking) {
+                const open = Math.abs(Math.sin(time * 15)) * 8;
+                ctx.beginPath();
+                ctx.ellipse(cx, mouthY, 6, 3 + open, 0, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                ctx.strokeStyle = '#B07070';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx, mouthY - 2, 6, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+            }
+
+            // 7. Blush
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.06)';
+            ctx.beginPath();
+            ctx.ellipse(cx - 35, cy + 35, 10, 6, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(cx + 35, cy + 35, 10, 6, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // 8. Front Hair
+            ctx.fillStyle = Colors.hair;
+            ctx.beginPath();
+            ctx.moveTo(cx - 60, cy - 30);
+            ctx.quadraticCurveTo(cx - 40, cy + 20, cx - 20, cy - 10);
+            ctx.quadraticCurveTo(cx, cy + 25, cx + 20, cy - 10);
+            ctx.quadraticCurveTo(cx + 40, cy + 20, cx + 60, cy - 30);
+            ctx.bezierCurveTo(cx + 60, cy - 90, cx - 60, cy - 90, cx - 60, cy - 30);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(cx - 55, cy - 20);
+            ctx.quadraticCurveTo(cx - 70 + hairSway, cy + 60, cx - 55 + (hairSway*0.5), cy + 80);
+            ctx.lineTo(cx - 45, cy + 40);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(cx + 55, cy - 20);
+            ctx.quadraticCurveTo(cx + 70 + hairSway, cy + 60, cx + 55 + (hairSway*0.5), cy + 80);
+            ctx.lineTo(cx + 45, cy + 40);
+            ctx.fill();
+
+            requestAnimationFrame(draw);
+        }
+
+        function updateBlink() {
+            if (blinkState === 0 && Math.random() > 0.99) blinkState = 1;
+            if (blinkState > 0) {
+                blinkTimer++;
+                if (blinkTimer > 3) {
+                    blinkTimer = 0;
+                    if (blinkState === 1) blinkState = 2;
+                    else if (blinkState === 2) blinkState = 3;
+                    else if (blinkState === 3) blinkState = 0;
+                }
+            }
+        }
+
+        draw();
+
+
+        /* --- APP LOGIC --- */
+        let steps = [], currentStep = -1, timerInterval, timeLeft, isPaused = false;
+
         function speak(text) {
+            if(!window.speechSynthesis) return;
             window.speechSynthesis.cancel();
-            let u = new SpeechSynthesisUtterance(text);
-            document.getElementById('speakingDot').style.display = 'block';
-            u.onend = () => document.getElementById('speakingDot').style.display = 'none';
+            
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 1.0;
+            
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
+            if(preferred) u.voice = preferred;
+
+            u.onstart = () => { isSpeaking = true; };
+            u.onend = () => { isSpeaking = false; };
+            u.onerror = () => { isSpeaking = false; };
+            
             window.speechSynthesis.speak(u);
         }
 
         async function load() {
             const id = new URLSearchParams(location.search).get('recipe_id');
-            const res = await fetch('/cook-with-ai', { 
-                method: 'POST', 
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({recipe_id: id})
-            });
-            const data = await res.json();
-            if(data.success) {
-                steps = data.parsed_steps;
-                document.getElementById('recipeTitle').innerText = data.recipe.name;
-                document.getElementById('instructionText').innerText = "Ready to cook?";
-                renderProgress(steps.length);
-                speak(`Ready to cook ${data.recipe.name}?`);
+            if(!id) return;
+
+            try {
+                const res = await fetch('/cook-with-ai', { 
+                    method: 'POST', 
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({recipe_id: id})
+                });
+                const data = await res.json();
+                if(data.success) {
+                    steps = data.parsed_steps;
+                    document.getElementById('recipeTitle').innerText = data.recipe.name;
+                    document.getElementById('instructionText').innerText = "Hi! I'm ready to assist you.";
+                    renderProgress(steps.length);
+                    window.speechSynthesis.getVoices(); 
+                    setTimeout(() => speak(`I have prepared the steps for ${data.recipe.name}. Shall we start?`), 800);
+                }
+            } catch(e) {
+                document.getElementById('instructionText').innerText = "Could not load recipe data.";
             }
         }
 
@@ -150,16 +421,20 @@
 
         function startCooking() {
             currentStep = 0;
-            document.getElementById('actionBtn').onclick = nextStep;
-            document.getElementById('actionBtn').innerText = "Next";
+            
+            // Rebind button for next step
+            const btn = document.getElementById('actionBtn');
+            btn.onclick = nextStep; // Set the handler directly on element
+            btn.innerText = "Next Step";
+            
             showStep();
         }
 
         function showStep() {
             if(currentStep >= steps.length) {
-                document.getElementById('instructionText').innerText = "Enjoy your meal!";
+                document.getElementById('instructionText').innerText = "Cooking Complete. Enjoy!";
                 document.getElementById('actionBtn').style.display = 'none';
-                speak("All done. Enjoy!");
+                speak("All done! Enjoy your meal.");
                 return;
             }
             
@@ -186,13 +461,18 @@
             timeLeft = mins * 60;
             document.getElementById('timerDisplay').classList.add('active');
             document.getElementById('secBtn').style.display = 'block';
-            document.getElementById('secBtn').onclick = toggleTimer;
+            document.getElementById('secBtn').onclick = toggleTimer; // bind directly
             updateTimerDisplay();
+            speak(`Starting timer for ${mins} minutes.`);
+            
             timerInterval = setInterval(() => {
                 if(!isPaused) {
                     timeLeft--;
                     updateTimerDisplay();
-                    if(timeLeft <= 0) nextStep();
+                    if(timeLeft <= 0) {
+                        speak("Time is up.");
+                        nextStep();
+                    }
                 }
             }, 1000);
         }
@@ -208,7 +488,13 @@
             document.getElementById('secBtn').innerText = isPaused ? "Resume" : "Pause";
         }
 
+        // Attach Initial Event Listeners
+        document.getElementById('actionBtn').onclick = startCooking;
+        // Note: secBtn onclick is assigned dynamically when timer starts
+
+        // Initialize
         load();
+    })();
     </script>
 </body>
 </html>
