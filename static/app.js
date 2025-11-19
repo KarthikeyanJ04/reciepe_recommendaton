@@ -114,6 +114,8 @@ function displayResults(recipes, query){
   recipes.forEach(r => fetchRecipeDetails(r.id, r.name, query));
 }
 
+let recipeDataStore = {};
+
 async function fetchRecipeDetails(recipeId, dishName, query){
   try {
     const response = await fetch('/cook-with-ai', {
@@ -124,13 +126,8 @@ async function fetchRecipeDetails(recipeId, dishName, query){
     const data = await response.json();
     
     if(data.success && data.recipe){
-      updateRecipeCard(recipeId, {
-        name: data.recipe.name,
-        ingredients: data.recipe.ingredients || [],
-        description: data.recipe.description || '',
-        instructions: data.recipe.instructions || [],
-        from_db: true
-      });
+      recipeDataStore[recipeId] = data; // Store full response
+      updateRecipeCard(recipeId, data.recipe);
     }
   } catch(e) { console.error(e); }
 }
@@ -142,7 +139,6 @@ function updateRecipeCard(recipeId, details){
   const visibleIngredients = details.ingredients.slice(0, 6);
   const remaining = details.ingredients.length - 6;
 
-  // Modern Card HTML Structure
   card.innerHTML = `
     <div class="recipe-header">
       <span class="ai-badge">AI Curated</span>
@@ -160,7 +156,7 @@ function updateRecipeCard(recipeId, details){
       </div>
       
       <div class="action-area">
-        <button class="cook-btn" onclick="openCookingAssistant(${recipeId})">
+        <button class="cook-btn" onclick="openCookingAssistant('${recipeId}')">
           Start Cooking
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
@@ -169,6 +165,37 @@ function updateRecipeCard(recipeId, details){
   `;
 }
 
-function openCookingAssistant(recipeId) {
-  window.location.href = `/cooking-assistant?recipe_id=${recipeId}`;
+async function openCookingAssistant(recipeId) {
+  const recipeData = recipeDataStore[recipeId];
+  if (!recipeData) {
+    // Fallback to old method if data not found
+    window.location.href = `/cooking-assistant?recipe_id=${recipeId}`;
+    return;
+  }
+
+  try {
+    const response = await fetch('/cooking-assistant-recipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(recipeData)
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        // Replace the document content with the new HTML
+        document.open();
+        document.write(result.html);
+        document.close();
+      } else {
+        console.error('Failed to load recipe page:', result.error);
+        alert('Could not load the cooking assistant. Please try again.');
+      }
+    } else {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Error opening cooking assistant:', error);
+    alert('An error occurred while trying to load the recipe. Please check the console for details.');
+  }
 }

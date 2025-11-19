@@ -294,7 +294,48 @@ def index():
 
 @app.route('/cooking-assistant')
 def cooking_assistant():
-    return render_template('cooking_assistant.html')
+    """Render cooking assistant page, optionally with a recipe ID."""
+    recipe_id = request.args.get('recipe_id')
+    recipe = None
+    parsed_steps = []
+
+    if recipe_id:
+        recipe = get_recipe_by_id(recipe_id)
+        if recipe:
+            # Parse instructions to find timers
+            for i, instruction in enumerate(recipe.get('instructions', [])):
+                timers = re.findall(r'(\d+)\s*min', instruction)
+                parsed_steps.append({
+                    'step_number': i + 1,
+                    'text': instruction,
+                    'timers': [int(t) for t in timers],
+                    'has_timer': bool(timers)
+                })
+
+    return render_template('cooking_assistant.html', recipe=recipe, parsed_steps=parsed_steps)
+
+
+@app.route('/cooking-assistant-recipe', methods=['POST'])
+def cooking_assistant_recipe():
+    """Render cooking assistant with full recipe data from POST."""
+    try:
+        data = request.json
+        recipe = data.get('recipe')
+        parsed_steps = data.get('parsed_steps', [])
+
+        if not recipe:
+            return jsonify({'success': False, 'error': 'No recipe data provided'}), 400
+
+        # Render the template with the provided data
+        # This requires rendering the template to a string and returning it
+        html_content = render_template('cooking_assistant.html', recipe=recipe, parsed_steps=parsed_steps)
+        
+        # Return as a JSON response so the frontend can decide what to do
+        return jsonify({'success': True, 'html': html_content})
+
+    except Exception as e:
+        print(f"Error in /cooking-assistant-recipe: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/cooking-assistant-3d')
