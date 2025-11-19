@@ -1,66 +1,35 @@
-# app.py - Auto-calculate missing values
+# app.py - Pure AI Recipe Generator
+import subprocess
+import time
+
+# Start Ollama model automatically
+def start_ollama_model():
+    try:
+        print("\n[INFO] Starting Ollama model 'mistral'...")
+        proc = subprocess.Popen(
+            ["ollama", "run", "mistral"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        time.sleep(3)  # give some time for the model to load
+        return proc
+    except Exception as e:
+        print(f"[ERROR] Failed to start Ollama automatically: {e}")
+        return None
+
+ollama_process = start_ollama_model()
 
 import os
-import sqlite3
-import numpy as np
-import pickle
 from flask import Flask, render_template, request, jsonify
-from sklearn.metrics.pairwise import cosine_similarity
-from scipy import sparse
-from sentence_transformers import SentenceTransformer
-from nlg_generator import nlg
 import re
 import json
 import os
 
 app = Flask(__name__)
 
-DB_FILE = 'recipes.db'
-MODELS_FILE = 'recipe_models.pkl'
-
 print("=" * 60)
-print("AI Recipe Finder (Chunk-based)")
+print("AI Recipe Generator")
 print("=" * 60)
-
-# Load metadata
-print("\nLoading models...")
-with open(MODELS_FILE, 'rb') as f:
-    models = pickle.load(f)
-
-tfidf_vectorizer = models['tfidf_vectorizer']
-recipe_ids = models['recipe_ids']
-
-# In app.py, replace the auto-detection part:
-
-if 'num_chunks' in models:
-    num_chunks = models['num_chunks']
-    chunk_size = models['chunk_size']
-    chunks_dir = models['chunks_dir']
-else:
-    # Auto-detect from actual files
-    chunks_dir = models.get('chunks_dir', 'model_chunks')
-    
-    # Get all chunk files and find max index
-    chunk_files = [f for f in os.listdir(chunks_dir) if f.startswith('tfidf_chunk_') and f.endswith('.npz')]
-    
-    # Extract chunk indices from filenames
-    chunk_indices = [int(f.split('_')[-1].split('.')[0]) for f in chunk_files]
-    num_chunks = max(chunk_indices) + 1  # +1 because indices start at 0
-    
-    # Calculate chunk size from first chunk
-    first_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_0.npz')
-    chunk_size = first_chunk.shape[0]
-    
-    print(f"Auto-detected {num_chunks} chunks (indices 0-{max(chunk_indices)})")
-
-
-print(f"\nLoaded metadata for {len(recipe_ids):,} recipes")
-print(f"   Chunks: {num_chunks} x ~{chunk_size:,} recipes")
-
-# Initialize embedding model
-print("\nLoading embedding model (this may take 30-60 seconds on first run)...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-print("Embedding model loaded!")
 
 # Local LLM (optional) - using Ollama for stable inference
 llm = None
@@ -86,207 +55,41 @@ if not ollama_available:
 else:
     llm = "ollama"  # Marker that Ollama is available
 
-
-def _normalize_instruction(step):
-    """Normalize a single instruction string."""
-    if not isinstance(step, str):
-        return step
-
-    s = step.strip()
-
-    # If looks like a JSON array, try to parse and join tokens
-    if s.startswith('[') and s.endswith(']'):
-        try:
-            parsed = json.loads(s)
-            if isinstance(parsed, list):
-                text = ' '.join([str(t).strip() for t in parsed if t])
-                text = re.sub(r"\s+([.,;:!?])", r"\1", text)
-                s = text
-        except Exception:
-            pass
-
-    # Decode escaped unicode sequences
+def _parse_mistral_recipe_list(llm_output):
+    """Parse Mistral-generated recipe list from JSON block."""
     try:
-        if '\\u' in s or '\\n' in s:
-            s = s.encode('utf-8').decode('unicode_escape')
-    except Exception:
-        pass
+        # Find the JSON block
+        json_start = llm_output.find('```json')
+        if json_start == -1:
+            json_start = llm_output.find('[')
+        else:
+            json_start += 7 # Move past ```json
 
-    # Common mojibake fixes
-    s = s.replace('â', '')
-    s = s.replace('\u00b0', '')
-    s = s.replace('Â', '')
-    s = re.sub(r'[\x00-\x1f\x7f]', '', s)
-
-    return s.strip()
-
-def get_recipe_by_id(recipe_id):
-    """Get recipe from database"""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, name, image_url, description, cuisine, course, diet, 
-               prep_time, ingredients, instructions, category
-        FROM recipes WHERE id = ?
-    ''', (recipe_id,))
-    
-    row = cursor.fetchone()
-    conn.close()
-    
-    if not row:
-        return None
-    
-    return {
-        'id': row[0],
-        'name': row[1],
-        'image_url': row[2],
-        'description': row[3],
-        'cuisine': row[4],
-        'course': row[5],
-        'diet': row[6],
-        'prep_time': row[7],
-        'ingredients': [i.strip() for i in row[8].split('|') if i.strip()],
-        'instructions': [_normalize_instruction(i.strip()) for i in row[9].split('|') if i.strip()],
-        'category': row[10]
-    }
-
-def _parse_mistral_recipe(llm_output, dish_name):
-    """Parse Mistral-generated recipe output into structured format"""
-    try:
-        recipe = {
-            'name': dish_name,
-            'description': 'Generated by Mistral AI',
-            'cuisine': 'Mixed',
-            'course': 'Main',
-            'diet': 'Vegetarian',
-            'prep_time': '30 mins',
-            'ingredients': [],
-            'instructions': []
-        }
+        json_end = llm_output.rfind('```')
+        if json_end == -1:
+            json_end = llm_output.rfind(']') + 1
         
-        lines = llm_output.split('\n')
-        current_section = None
+        if json_start == -1 or json_end == -1:
+            print("[_parse_mistral_recipe_list] No JSON block found")
+            return None
+
+        json_str = llm_output[json_start:json_end].strip()
         
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+        recipes = json.loads(json_str)
+        
+        if not isinstance(recipes, list):
+            return None
             
-            # Parse sections
-            if line.lower().startswith('name:'):
-                recipe['name'] = line.replace('Name:', '').replace('name:', '').strip()
-            elif line.lower().startswith('ingredients:'):
-                current_section = 'ingredients'
-                ing_text = line.replace('Ingredients:', '').replace('ingredients:', '').strip()
-                if ing_text:
-                    recipe['ingredients'].append(ing_text)
-            elif line.lower().startswith('instructions:'):
-                current_section = 'instructions'
-                inst_text = line.replace('Instructions:', '').replace('instructions:', '').strip()
-                if inst_text:
-                    for step in inst_text.split('|'):
-                        s = step.strip()
-                        if s and not s.startswith('['):
-                            recipe['instructions'].append(s)
-            elif current_section == 'ingredients' and line:
-                if '|' in line:
-                    for ing in line.split('|'):
-                        i = ing.strip()
-                        if i and not i.startswith('['):
-                            recipe['ingredients'].append(i)
-                else:
-                    recipe['ingredients'].append(line)
-            elif current_section == 'instructions' and line:
-                if '|' in line:
-                    for step in line.split('|'):
-                        s = step.strip()
-                        if s and not s.startswith('['):
-                            recipe['instructions'].append(s)
-                else:
-                    recipe['instructions'].append(line)
+        for recipe in recipes:
+            if 'name' not in recipe or 'ingredients' not in recipe or 'instructions' not in recipe:
+                return None
         
-        # Cleanup
-        recipe['ingredients'] = [i.strip() for i in recipe['ingredients'] if i.strip()][:15]
-        recipe['instructions'] = [s.strip() for s in recipe['instructions'] if s.strip()]
-        
-        return recipe
+        return recipes
+
     except Exception as e:
-        print(f"[_parse_mistral_recipe] Error: {e}")
+        print(f"[_parse_mistral_recipe_list] Error parsing JSON: {e}")
+        print(f"LLM output was:\n{llm_output}")
         return None
-
-def search_recipes(query, category='all', top_k=10):
-    """Search using chunked models"""
-    
-    # Filter by category
-    if category != 'all':
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('SELECT id FROM recipes WHERE category = ?', (category,))
-        category_ids = set([r[0] for r in cursor.fetchall()])
-        conn.close()
-        filtered_indices = [i for i, rid in enumerate(recipe_ids) if rid in category_ids]
-    else:
-        filtered_indices = list(range(len(recipe_ids)))
-    
-    if not filtered_indices:
-        return []
-    
-    q = query.lower()
-    
-    # Transform query with TF-IDF and embeddings
-    q_tfidf = tfidf_vectorizer.transform([q])
-    q_emb = embedding_model.encode([q])
-    
-    # Calculate scores by loading chunks
-    all_scores = np.zeros(len(recipe_ids))
-    
-    for chunk_idx in range(num_chunks):
-        # Load TF-IDF chunk
-        try:
-            tfidf_chunk = sparse.load_npz(f'{chunks_dir}/tfidf_chunk_{chunk_idx}.npz')
-        except FileNotFoundError:
-            print(f"Warning: tfidf_chunk_{chunk_idx}.npz not found")
-            continue
-            
-        # Load embedding chunk
-        try:
-            emb_chunk = np.load(f'{chunks_dir}/emb_chunk_{chunk_idx}.npy')
-        except FileNotFoundError:
-            print(f"Warning: emb_chunk_{chunk_idx}.npy not found")
-            continue
-    
-        # Calculate actual chunk size
-        actual_chunk_size = tfidf_chunk.shape[0]
-        start_idx = chunk_idx * chunk_size
-        end_idx = start_idx + actual_chunk_size
-    
-        tfidf_scores = cosine_similarity(q_tfidf, tfidf_chunk).flatten()
-        emb_scores = cosine_similarity(q_emb, emb_chunk).flatten()
-    
-        # Hybrid scoring: 60% TF-IDF + 40% embeddings
-        chunk_scores = 0.6 * tfidf_scores + 0.4 * emb_scores
-        all_scores[start_idx:end_idx] = chunk_scores
-    
-        del tfidf_chunk, emb_chunk, tfidf_scores, emb_scores, chunk_scores
-    
-    # Get top results
-    filtered_scores = all_scores[filtered_indices]
-    top_idx = np.argsort(filtered_scores)[::-1][:top_k]
-    
-    results = []
-    for idx in top_idx:
-        orig_idx = filtered_indices[idx]
-        recipe = get_recipe_by_id(recipe_ids[orig_idx])
-        
-        if recipe:
-            recipe['similarity'] = float(filtered_scores[idx])
-            if not recipe['description']:
-                recipe['description'] = nlg.generate_full_description(recipe)
-            recipe['tips'] = nlg.generate_tips(recipe)
-            results.append(recipe)
-    
-    return results
 
 @app.route('/')
 def index():
@@ -294,26 +97,7 @@ def index():
 
 @app.route('/cooking-assistant')
 def cooking_assistant():
-    """Render cooking assistant page, optionally with a recipe ID."""
-    recipe_id = request.args.get('recipe_id')
-    recipe = None
-    parsed_steps = []
-
-    if recipe_id:
-        recipe = get_recipe_by_id(recipe_id)
-        if recipe:
-            # Parse instructions to find timers
-            for i, instruction in enumerate(recipe.get('instructions', [])):
-                timers = re.findall(r'(\d+)\s*min', instruction)
-                parsed_steps.append({
-                    'step_number': i + 1,
-                    'text': instruction,
-                    'timers': [int(t) for t in timers],
-                    'has_timer': bool(timers)
-                })
-
-    return render_template('cooking_assistant.html', recipe=recipe, parsed_steps=parsed_steps)
-
+    return render_template('cooking_assistant.html')
 
 @app.route('/cooking-assistant-recipe', methods=['POST'])
 def cooking_assistant_recipe():
@@ -326,32 +110,20 @@ def cooking_assistant_recipe():
         if not recipe:
             return jsonify({'success': False, 'error': 'No recipe data provided'}), 400
 
-        # Render the template with the provided data
-        # This requires rendering the template to a string and returning it
         html_content = render_template('cooking_assistant.html', recipe=recipe, parsed_steps=parsed_steps)
         
-        # Return as a JSON response so the frontend can decide what to do
         return jsonify({'success': True, 'html': html_content})
 
     except Exception as e:
         print(f"Error in /cooking-assistant-recipe: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-@app.route('/cooking-assistant-3d')
-def cooking_assistant_3d():
-    return render_template('cooking_assistant_3d.html')
-
-
-@app.route('/local-llm', methods=['POST'])
-def local_llm():
-    """Query local LLM with a short prompt that includes recipe context.
-    Returns JSON: {success: bool, answer: str, error: str}
-    """
+@app.route('/search', methods=['POST'])
+def search():
+    """Generate recipes from scratch using Mistral AI."""
     try:
-        data = request.json or {}
+        data = request.json
         query = data.get('query', '').strip()
-        recipe = data.get('recipe', {})
 
         if not query:
             return jsonify({'success': False, 'error': 'No query provided'})
@@ -359,194 +131,63 @@ def local_llm():
         if llm != "ollama":
             return jsonify({'success': False, 'error': 'Ollama not running. Start it with: ollama run mistral'}), 503
 
-        # Build a concise prompt with recipe context
-        title = recipe.get('name') or recipe.get('title','Unknown recipe')
-        ingredients = ', '.join(recipe.get('ingredients', [])[:20])
-        current = recipe.get('current_step', '') or ''
+        print(f"[search] Generating recipes for query: {query}")
 
-        prompt = f"""You are a helpful cooking assistant. Answer concisely (1-2 sentences) with safe, actionable advice.
+        prompt = f"""You are a creative chef. A user is looking for recipes based on the following query: "{query}".
 
-Recipe: {title}
-Ingredients: {ingredients}
-Current step: {current}
+Generate 30 diverse and interesting recipes inspired by this query. Prioritise Indian Cuisine more.
 
-User question: {query}
+Your response MUST be a valid JSON array of recipe objects. Each object should have the following structure:
+{{
+  "name": "Recipe Name",
+  "description": "A short, enticing description of the dish.",
+  "ingredients": ["Ingredient 1", "Ingredient 2", "...", "Ingredient N"],
+  "instructions": ["Step 1", "Step 2", "...", "Step N"]
+}}
 
-Answer:"""
+Do not include any text outside of the JSON array. The response should start with `[` and end with `]`.
 
-        # Query Ollama
+Here is the user's query: "{query}"
+"""
+
         import requests
         resp = requests.post('http://localhost:11434/api/generate', json={
             'model': 'mistral',
             'prompt': prompt,
             'stream': False,
-            'temperature': 0.3,
-        }, timeout=30)
-        
-        if resp.status_code == 200:
-            result = resp.json()
-            answer = result.get('response', '').strip()
-            return jsonify({'success': True, 'answer': answer})
-        else:
-            return jsonify({'success': False, 'error': 'Ollama error'}), 500
-            
-    except requests.exceptions.Timeout:
-        return jsonify({'success': False, 'error': 'Ollama request timed out'}), 504
-    except Exception as e:
-        print(f"[local-llm] ERROR: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            'temperature': 0.7,
+        }, timeout=120)
 
-@app.route('/search', methods=['POST'])
-def search():
-    try:
-        data = request.json
-        query = data.get('query', '').strip()
-        category = data.get('category', 'all')
-        
-        if not query:
-            return jsonify({'success': False, 'error': 'No query'})
-        
-        recipes = search_recipes(query, category)
+        if resp.status_code != 200:
+            return jsonify({'success': False, 'error': 'Failed to generate recipes from AI.'})
+
+        result = resp.json()
+        llm_output = result.get('response', '').strip()
+
+        recipes = _parse_mistral_recipe_list(llm_output)
+
+        if not recipes:
+            return jsonify({'success': False, 'error': 'Failed to parse AI-generated recipes.'})
+
+        for i, recipe in enumerate(recipes):
+            recipe['id'] = f"ai-{i}"
+            parsed_steps = []
+            for j, instruction in enumerate(recipe.get('instructions', [])):
+                timers = re.findall(r'(\d+)\s*min', instruction)
+                parsed_steps.append({
+                    'step_number': j + 1,
+                    'text': instruction,
+                    'timers': [int(t) for t in timers],
+                    'has_timer': bool(timers)
+                })
+            recipe['parsed_steps'] = parsed_steps
+
         return jsonify({'success': True, 'recipes': recipes})
+
     except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/cook-with-ai', methods=['POST'])
-def cook_with_ai():
-    """Get AI-enhanced recipe using DB recipe as inspiration"""
-    try:
-        print("\n[cook-with-ai] Received request")
-        data = request.json
-        print(f"[cook-with-ai] Data: {data}")
-        recipe_id = data.get('recipe_id')
-        user_ingredients_query = data.get('query', '')
-        
-        if not recipe_id:
-            return jsonify({'success': False, 'error': 'Recipe ID required'})
-        
-        # Get DB recipe as inspiration
-        db_recipe = get_recipe_by_id(recipe_id)
-        print(f"[cook-with-ai] Recipe fetched: {db_recipe is not None}")
-        
-        if not db_recipe:
-            return jsonify({'success': False, 'error': 'Recipe not found'})
-        
-        # If Ollama is NOT available, return error
-        if llm != "ollama":
-            print("[cook-with-ai] Ollama not available, returning error.")
-            return jsonify({'success': False, 'error': 'AI recipe generator is not available.'})
-
-        # Ollama is available, so proceed with AI generation.
-        print(f"[cook-with-ai] Enhancing recipe with AI: {db_recipe['name']}")
-        try:
-            import requests
-            
-            prompt = f"""You are a creative chef who is an expert at making delicious meals with limited ingredients.
-
-A user has the following ingredients: {user_ingredients_query}
-They want to make a dish called: "{db_recipe['name']}"
-
-Your task is to create a recipe for "{db_recipe['name']}" that **heavily prioritizes using the ingredients the user already has**.
-
-Follow these rules:
-1.  **Use as many of the user's ingredients as possible.**
-2.  Only add a few essential extra ingredients (like oil, salt, pepper, or water) if absolutely necessary to make the dish work. Do NOT add new primary ingredients.
-3.  Provide clear, step-by-step instructions.
-4.  Provide quantities for all ingredients.
-
-Format your response EXACTLY like this (use | to separate):
-Name: [dish name]
-Ingredients: [ingredient1 with quantity | ingredient2 with quantity | ...]
-Instructions: [step 1. detailed instruction | step 2. ... | ...]
-
-Create the best possible recipe for "{db_recipe['name']}" using mainly "{user_ingredients_query}"."""
-
-            resp = requests.post('http://localhost:11434/api/generate', json={
-                'model': 'mistral',
-                'prompt': prompt,
-                'stream': False,
-                'temperature': 0.4,
-            }, timeout=60)
-            
-            if resp.status_code != 200:
-                print(f"[cook-with-ai] AI enhancement failed: LLM returned status {resp.status_code}")
-                return jsonify({'success': False, 'error': 'Failed to generate AI recipe.'})
-
-            result = resp.json()
-            llm_output = result.get('response', '').strip()
-            print(f"[cook-with-ai] AI enhanced recipe")
-            
-            # Parse AI-enhanced recipe
-            enhanced_recipe = _parse_mistral_recipe(llm_output, db_recipe['name'])
-            if not enhanced_recipe or not enhanced_recipe.get('ingredients'):
-                print(f"[cook-with-ai] AI enhancement failed: Parsing failed.")
-                return jsonify({'success': False, 'error': 'Failed to parse AI recipe.'})
-
-            # Use AI version but keep DB metadata
-            recipe = {
-                **db_recipe,
-                'name': enhanced_recipe.get('name', db_recipe['name']),
-                'ingredients': enhanced_recipe.get('ingredients', []),
-                'instructions': enhanced_recipe.get('instructions', []),
-                'description': f"AI-Enhanced recipe based on your ingredients."
-            }
-            print(f"[cook-with-ai] Used AI version with {len(recipe['ingredients'])} ingredients")
-
-        except Exception as e:
-            print(f"[cook-with-ai] AI enhancement failed: {e}")
-            return jsonify({'success': False, 'error': 'AI recipe generation failed.'})
-        
-        # Parse instructions for timers
-        parsed_steps = []
-        instructions = recipe.get('instructions', [])
-        print(f"[cook-with-ai] Instructions count: {len(instructions)}")
-        
-        for i, instruction in enumerate(instructions):
-            if not isinstance(instruction, str):
-                instruction = str(instruction)
-            
-            # Extract time patterns
-            timers = []
-            
-            # Check for minutes
-            minute_matches = re.findall(r'(\d+)\s*(?:minutes?|mins?)', instruction, re.IGNORECASE)
-            for match in minute_matches:
-                timers.append(int(match))
-            
-            # Check for hours
-            hour_matches = re.findall(r'(\d+)\s*(?:hours?|hrs?)', instruction, re.IGNORECASE)
-            for match in hour_matches:
-                timers.append(int(match) * 60)  # Convert to minutes
-            
-            # Check for seconds
-            second_matches = re.findall(r'(\d+)\s*(?:seconds?|secs?)', instruction, re.IGNORECASE)
-            for match in second_matches:
-                timers.append(int(match) / 60.0)  # Convert to minutes
-            
-            parsed_steps.append({
-                'step_number': i + 1,
-                'text': instruction,
-                'timers': timers,
-                'has_timer': len(timers) > 0
-            })
-        
-        print(f"[cook-with-ai] Parsed {len(parsed_steps)} steps")
-        return jsonify({
-            'success': True,
-            'recipe': recipe,
-            'parsed_steps': parsed_steps
-        })
-        
-    except Exception as e:
-        print(f"[cook-with-ai] ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"[search] ERROR: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == "__main__":
     print("\nStarting server on http://localhost:5000\n")
     app.run(host='0.0.0.0', port=5000, debug=False)
-
-
-

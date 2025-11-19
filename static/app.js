@@ -14,14 +14,6 @@ function escapeHtml(str){
     .replace(/'/g, '&#39;');
 }
 
-function normalizeInstruction(raw){
-  if(!raw) return '';
-  let s = String(raw).trim();
-  // Simple cleanup logic
-  s = s.replace(/^[\[\]\(\)\"']+|[\[\]\(\)\"']+$/g, '').replace(/\\n/g, '\n');
-  return s;
-}
-
 /* ==========================================
    THEME & INIT
    ========================================== */
@@ -40,15 +32,6 @@ if(themeToggle){
   });
 }
 
-let selectedCategory = 'all';
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', function() {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    this.classList.add('active');
-    selectedCategory = this.dataset.category;
-  });
-});
-
 const searchBtnEl = document.getElementById('searchBtn');
 const searchInputEl = document.getElementById('searchInput');
 
@@ -58,6 +41,8 @@ if(searchInputEl) searchInputEl.addEventListener('keypress', (e) => { if(e.key==
 /* ==========================================
    CORE LOGIC
    ========================================== */
+
+let recipeDataStore = {};
 
 async function searchRecipes(){
   const query = (document.getElementById('searchInput')||{value:''}).value.trim();
@@ -71,95 +56,65 @@ async function searchRecipes(){
   if(loading) loading.style.display = 'block';
   if(results) results.innerHTML = '';
 
-  try{
+  try {
     const response = await fetch('/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category: selectedCategory })
+      body: JSON.stringify({ query })
     });
     const data = await response.json();
     
     if(data.success){
-      displayResults(data.recipes, query);
+      displayResults(data.recipes);
     } else {
       results.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">No recipes found.</div>`;
     }
-  }catch(e){
+  } catch(e) {
     console.error(e);
-  }finally{
+    results.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">An error occurred.</div>`;
+  } finally {
     if(searchBtn) searchBtn.disabled = false;
     if(loading) loading.style.display = 'none';
   }
 }
 
-function displayResults(recipes, query){
+function displayResults(recipes){
   const results = document.getElementById('results');
   if(!results) return;
 
-  // Render Skeleton
-  results.innerHTML = recipes.map(recipe => `
+  results.innerHTML = recipes.map(recipe => {
+    recipeDataStore[recipe.id] = { recipe: recipe, parsed_steps: recipe.parsed_steps };
+    return getRecipeCardHtml(recipe);
+  }).join('');
+}
+
+function getRecipeCardHtml(recipe) {
+  const visibleIngredients = recipe.ingredients.slice(0, 6);
+  const remaining = recipe.ingredients.length - 6;
+
+  return `
     <div class="recipe-card" id="card-${recipe.id}">
       <div class="recipe-header">
-        <div class="ai-badge">Loading...</div>
+        <span class="ai-badge">AI Generated</span>
         <h2 class="recipe-title">${escapeHtml(recipe.name)}</h2>
-      </div>
-      <div class="recipe-body">
-        <div style="height:100px; display:flex; align-items:center; justify-content:center; color:var(--text-light);">
-          Processing...
-        </div>
-      </div>
-    </div>
-  `).join('');
-
-  recipes.forEach(r => fetchRecipeDetails(r.id, r.name, query));
-}
-
-let recipeDataStore = {};
-
-async function fetchRecipeDetails(recipeId, dishName, query){
-  try {
-    const response = await fetch('/cook-with-ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipe_id: recipeId, query: query })
-    });
-    const data = await response.json();
-    
-    if(data.success && data.recipe){
-      recipeDataStore[recipeId] = data; // Store full response
-      updateRecipeCard(recipeId, data.recipe);
-    }
-  } catch(e) { console.error(e); }
-}
-
-function updateRecipeCard(recipeId, details){
-  const card = document.getElementById(`card-${recipeId}`);
-  if(!card) return;
-
-  const visibleIngredients = details.ingredients.slice(0, 6);
-  const remaining = details.ingredients.length - 6;
-
-  card.innerHTML = `
-    <div class="recipe-header">
-      <span class="ai-badge">AI Curated</span>
-      <h2 class="recipe-title">${escapeHtml(details.name)}</h2>
-      <p class="recipe-desc">${escapeHtml(details.description)}</p>
-    </div>
-    
-    <div class="recipe-body">
-      <div>
-        <h3 class="mini-section-title">Ingredients</h3>
-        <div class="ingredient-tags">
-          ${visibleIngredients.map(ing => `<span class="ing-tag">${escapeHtml(ing)}</span>`).join('')}
-          ${remaining > 0 ? `<span class="ing-tag" style="opacity:0.5">+${remaining}</span>` : ''}
-        </div>
+        <p class="recipe-desc">${escapeHtml(recipe.description)}</p>
       </div>
       
-      <div class="action-area">
-        <button class="cook-btn" onclick="openCookingAssistant('${recipeId}')">
-          Start Cooking
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </button>
+      <div class="recipe-body">
+        <div>
+          <h3 class="mini-section-title">Ingredients</h3>
+          <div class="ingredient-tags">
+            ${visibleIngredients.map(ing => `<span class="ing-tag">${escapeHtml(ing)}</span>`).join('')}
+            ${remaining > 0 ? `<span class="ing-tag" style="opacity:0.5">+${remaining}</span>` : ''}
+          </div>
+        </div>
+        
+        <div class="action-area">
+          <button class="cook-btn" onclick="openCookingAssistant('${recipe.id}')">
+            Start Cooking
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -168,8 +123,7 @@ function updateRecipeCard(recipeId, details){
 async function openCookingAssistant(recipeId) {
   const recipeData = recipeDataStore[recipeId];
   if (!recipeData) {
-    // Fallback to old method if data not found
-    window.location.href = `/cooking-assistant?recipe_id=${recipeId}`;
+    alert('Could not find recipe data. Please try again.');
     return;
   }
 
@@ -183,7 +137,6 @@ async function openCookingAssistant(recipeId) {
     if (response.ok) {
       const result = await response.json();
       if (result.success) {
-        // Replace the document content with the new HTML
         document.open();
         document.write(result.html);
         document.close();
