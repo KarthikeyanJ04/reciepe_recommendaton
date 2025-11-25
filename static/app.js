@@ -83,6 +83,7 @@ function displayResults(recipes){
   if(!results) return;
 
   results.innerHTML = recipes.map(recipe => {
+    // Store data for cooking assistant
     recipeDataStore[recipe.id] = { recipe: recipe, parsed_steps: recipe.parsed_steps };
     return getRecipeCardHtml(recipe);
   }).join('');
@@ -120,35 +121,6 @@ function getRecipeCardHtml(recipe) {
   `;
 }
 
-async function openCookingAssistant(recipeId) {
-  const recipeData = recipeDataStore[recipeId];
-  if (!recipeData) {
-    alert('Could not find recipe data. Please try again.');
-    return;
-  }
-
-  try {
-    const response = await fetch('/cooking-assistant-recipe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(recipeData)
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      if (result.success) {
-        document.open();
-        document.write(result.html);
-        document.close();
-      } else {
-        console.error('Failed to load recipe page:', result.error);
-        alert('Could not load the cooking assistant. Please try again.');
-      }
-    } else {
-      throw new Error(`Server responded with status: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error opening cooking assistant:', error);
-    alert('An error occurred while trying to load the recipe. Please check the console for details.');
-  }
+function openCookingAssistant(recipeId) {
+  window.location.href = `/cooking_assistant.html?recipe_id=${recipeId}`;
 }

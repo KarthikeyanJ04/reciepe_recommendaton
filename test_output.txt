@@ -1,0 +1,17 @@
+Loading models...
+Loaded 2236367 recipes. Chunks: 45
+
+Searching for: 'pasta'
+  - String Pasta (Indian)
+  - Pasta with Creamy Garlic & Pistachio Sauce (Indian)
+  - Smelly Bachelor Pasta (Indian)
+
+Searching for: 'spicy chicken'
+  - Spicy Chicken(Low-Fat) (Indian)
+  - Spicy Chicken Surprise Soup (Indian)
+  - Spicy Chicken Salad (Indian)
+
+Searching for: 'paneer'
+  - Stir Fried Paneer With Veggies (Paneer Burji) (Indian)
+  - Paneer 65 Recipe - Restaurant Style (Indian)
+  - Mattar Paneer (Indian)

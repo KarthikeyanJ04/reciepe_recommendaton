@@ -3,219 +3,361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Focus Mode</title>
+    <title>Focus Mode | Culin.ary</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&display=swap">
     <style>
-        :root {
-            --bg: #ffffff;
-            --text: #111111;
-            --accent: #000000;
-            --glass: rgba(255, 255, 255, 0.9);
-            --glass-border: rgba(0, 0, 0, 0.08);
-            --shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+        /* --- Focus Mode Specific Overrides --- */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #ffffff;
+            background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f4f4f5 100%);
+            color: #111;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
         }
 
-        body {
-            background: var(--bg);
-            background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f4f4f5 100%);
-            color: var(--text);
-            font-family: 'Inter', sans-serif;
+        /* UI Variables */
+        :root {
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --border-light: rgba(0,0,0,0.08);
+            --text-main: #111;
+            --text-muted: #666;
+            --radius-lg: 32px;
+            --radius-pill: 100px;
+            --shadow-card: 0 20px 40px rgba(0,0,0,0.04);
+            --accent: #000;
+        }
+
+        .focus-container {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-            overflow-x: hidden;
+            padding-bottom: 60px;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
         }
 
-        /* --- AVATAR CONTAINER --- */
+        /* Avatar Canvas */
         #avatar-container {
-            width: 340px;
-            height: 340px;
-            margin: 0 auto 20px;
+            width: 320px;
+            height: 320px;
+            margin-bottom: 10px;
             position: relative;
-            z-index: 1;
         }
         
         canvas {
             width: 100%;
             height: 100%;
-            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.1));
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.08));
         }
 
-        /* --- UI ELEMENTS --- */
-        .status-bar {
-            position: fixed;
-            top: 30px;
-            left: 0;
-            right: 0;
+        /* Step Progress Bar */
+        .step-progress {
             display: flex;
-            justify-content: center;
-            gap: 6px;
-            z-index: 10;
-        }
-        .dot { 
-            width: 30px; 
-            height: 3px; 
-            background: #e0e0e0; 
-            border-radius: 4px; 
-            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); 
-        }
-        .dot.active { 
-            background: var(--accent); 
-            width: 50px; 
-        }
-
-        .main-stage {
-            max-width: 600px;
+            gap: 8px;
+            margin-bottom: 40px;
             width: 100%;
-            z-index: 2;
-            position: relative;
-        }
-
-        h1 { 
-            font-size: 2.2rem; 
-            font-weight: 800; 
-            margin-bottom: 10px; 
-            letter-spacing: -0.03em; 
-            color: var(--text);
+            justify-content: center;
+            padding: 0 20px;
         }
         
-        .instruction-card {
-            font-size: 1.4rem;
-            line-height: 1.6;
-            font-weight: 500;
-            min-height: 150px;
+        .progress-dash {
+            height: 4px;
+            flex: 1;
+            background: #e0e0e0;
+            border-radius: 4px;
+            transition: all 0.4s ease;
+            max-width: 40px;
+        }
+        
+        .progress-dash.active { background: #111; transform: scaleY(1.5); }
+        .progress-dash.completed { background: #666; }
+
+        /* Focus Card */
+        .focus-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 50px;
+            width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .step-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .instruction-text {
+            font-size: 1.6rem;
+            line-height: 1.4;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 40px;
+            min-height: 100px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 40px;
-            padding: 40px;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: 30px;
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            transition: transform 0.3s ease;
         }
-        
-        .instruction-card:hover { transform: translateY(-5px); }
 
-        .timer {
-            font-size: 5rem;
-            font-variant-numeric: tabular-nums;
+        /* Timer Styles */
+        .timer-display {
+            font-size: 4rem;
             font-weight: 800;
-            margin: 20px 0 40px 0;
+            font-variant-numeric: tabular-nums;
+            margin: 20px 0;
             display: none;
-            color: var(--accent);
+            color: var(--text-main);
             letter-spacing: -2px;
         }
-        .timer.active { display: block; animation: fadeIn 0.5s ease; }
+        .timer-display.active { display: block; animation: slideUp 0.5s ease; }
 
-        .controls {
+        /* Controls */
+        .controls-row {
             display: flex;
             gap: 15px;
             justify-content: center;
-            width: 100%;
+            margin-top: 20px;
         }
 
-        button {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 20px 40px;
-            font-size: 1.05rem;
+        .btn-focus {
+            padding: 16px 32px;
+            border-radius: var(--radius-pill);
             font-weight: 600;
-            border-radius: 100px;
+            font-size: 1.1rem;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            flex: 1;
-            max-width: 200px;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .btn-primary {
+            background: #111;
+            color: #fff;
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
         
-        button:hover { transform: scale(1.03); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
-        button:active { transform: scale(0.98); }
-        
-        button.secondary { 
-            background: #fff; 
-            color: var(--text); 
-            border: 1px solid #e5e5e5; 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.03);
+        .btn-secondary {
+            background: transparent;
+            color: #111;
+            border-color: #e5e5e5;
         }
-        button.secondary:hover { border-color: #000; }
+        .btn-secondary:hover { border-color: #111; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+        /* Header & Theme Toggle Overlay */
+        .header-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+        .header-overlay > * { pointer-events: auto; }
+        
+        .logo { font-weight: 800; font-size: 1.2rem; cursor: pointer; color: #111; }
+        
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; } }
     </style>
 </head>
 <body>
-    <div class="status-bar" id="progressBar"></div>
-
-    <div id="avatar-container">
-        <canvas id="avatarCanvas"></canvas>
+    
+    <div class="header-overlay">
+        <div class="logo" onclick="window.location.href='/'">Culin.ary</div>
     </div>
 
-    <div class="main-stage" id="stage">
-        <h1 id="recipeTitle">Loading...</h1>
-        
-        <div class="instruction-card" id="instructionText">
-            Preparing your kitchen...
+    <div class="focus-container">
+        <!-- Avatar -->
+        <div id="avatar-container">
+            <canvas id="avatarCanvas"></canvas>
         </div>
 
-        <div class="timer" id="timerDisplay">00:00</div>
+        <!-- Progress -->
+        <div class="step-progress" id="progressBar"></div>
 
-        <div class="controls">
-            <button id="actionBtn">Start Cooking</button>
-            <button id="secBtn" class="secondary" style="display:none">Pause</button>
+        <!-- Content Card -->
+        <div class="focus-card">
+            <div class="step-title" id="stepLabel">Initializing</div>
+            <div class="instruction-text" id="instructionText">Connecting to AI Assistant...</div>
+            <div class="timer-display" id="timerDisplay">00:00</div>
+            
+            <div class="controls-row">
+                <button id="actionBtn" class="btn-focus btn-primary">Start Cooking</button>
+                <button id="secBtn" class="btn-focus btn-secondary" style="display:none">Pause</button>
+            </div>
         </div>
     </div>
 
     <script>
-    // Wrap everything in a function to prevent global scope pollution
     (function() {
-        /**
-         * HIGH FIDELITY 2D VECTOR ENGINE
-         */
+        // --- AVATAR ENGINE (2D Canvas) ---
         const canvas = document.getElementById('avatarCanvas');
         const ctx = canvas.getContext('2d');
         
+        // Retina display setup
         const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
+        let rect = canvas.getBoundingClientRect();
+        
+        function resize() {
+            rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', resize);
+        resize(); // Init
 
+        // Animation State
         let time = 0;
         let isSpeaking = false;
         let blinkState = 0;
         let blinkTimer = 0;
-        
-        // Colors localized
-        const Colors = {
-            skin: '#FFF0E5',
-            line: '#111111',
-            hair: '#1A1A1A',
-            white: '#FFFFFF',
-            shading: 'rgba(0,0,0,0.05)'
-        };
 
+        // Avatar Loop
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const w = rect.width;
+            const h = rect.height;
+            const cx = w / 2;
+            const cy = h / 2;
             
-            time += 0.03;
-            const breathe = Math.sin(time) * 3;
-            const hairSway = Math.sin(time * 1.5) * 2;
+            ctx.clearRect(0, 0, w, h);
             
-            const cx = rect.width / 2;
-            const cy = rect.height / 2 + 20 + breathe;
+            time += 0.05;
+            
+            // Float Animation
+            const hoverY = Math.sin(time * 0.05) * 5;
+            const currentCy = cy + hoverY;
 
-            // ... (drawing functions remain the same)
+            // Drawing Configuration
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // 1. Back Hair
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(cx, currentCy + 10, 90, Math.PI, 0, false);
+            ctx.bezierCurveTo(cx + 90, currentCy + 130, cx - 90, currentCy + 130, cx - 90, currentCy + 10);
+            ctx.fill();
+
+            // 2. Neck
+            ctx.fillStyle = '#ffeadd';
+            ctx.fillRect(cx - 15, currentCy + 50, 30, 40);
+            // Neck Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(cx - 15, currentCy + 50, 30, 12);
+
+            // 3. Clothes (Black Turtleneck)
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.ellipse(cx, currentCy + 140, 55, 60, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 4. Face
+            ctx.fillStyle = '#ffeadd';
+            ctx.beginPath();
+            // Jawline
+            ctx.moveTo(cx - 52, currentCy - 20);
+            ctx.bezierCurveTo(cx - 52, currentCy + 60, cx - 20, currentCy + 85, cx, currentCy + 85);
+            ctx.bezierCurveTo(cx + 20, currentCy + 85, cx + 52, currentCy + 60, cx + 52, currentCy - 20);
+            // Forehead
+            ctx.bezierCurveTo(cx + 52, currentCy - 70, cx - 52, currentCy - 70, cx - 52, currentCy - 20);
+            ctx.fill();
+
+            // 5. Eyes
+            updateBlink();
+            const eyeY = currentCy + 5;
+            drawEye(cx - 24, eyeY, blinkState); // Left
+            drawEye(cx + 24, eyeY, blinkState); // Right
+
+            // 6. Mouth
+            const mouthY = currentCy + 45;
+            ctx.fillStyle = '#d48b8b';
+            ctx.beginPath();
+            if (isSpeaking) {
+                // Talking animation
+                const open = 5 + Math.sin(time * 0.8) * 4;
+                ctx.ellipse(cx, mouthY, 8, open, 0, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                // Smile
+                ctx.strokeStyle = '#c57a7a';
+                ctx.lineWidth = 2.5;
+                ctx.arc(cx, mouthY - 2, 8, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+            }
+
+            // 7. Blush
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.1)';
+            ctx.beginPath();
+            ctx.ellipse(cx - 35, currentCy + 25, 10, 6, 0, 0, Math.PI*2);
+            ctx.ellipse(cx + 35, currentCy + 25, 10, 6, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // 8. Front Hair (Bangs)
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.moveTo(cx - 55, currentCy - 30);
+            ctx.quadraticCurveTo(cx - 20, currentCy + 10, cx, currentCy - 15);
+            ctx.quadraticCurveTo(cx + 20, currentCy + 10, cx + 55, currentCy - 30);
+            ctx.bezierCurveTo(cx + 50, currentCy - 80, cx - 50, currentCy - 80, cx - 55, currentCy - 30);
+            ctx.fill();
 
             requestAnimationFrame(draw);
+        }
+
+        function drawEye(x, y, state) {
+            if (state === 2 || state === 1 || state === 3) {
+                // Blink (Line)
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x - 9, y + 2);
+                ctx.quadraticCurveTo(x, y + 6, x + 9, y + 2);
+                ctx.stroke();
+            } else {
+                // Open (Circle)
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(x, y, 11, 10, 0, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Iris
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI*2);
+                ctx.fill();
+
+                // Highlight
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(x - 3, y - 3, 2.5, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Lash
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x - 11, y - 4);
+                ctx.quadraticCurveTo(x, y - 9, x + 11, y - 2);
+                ctx.stroke();
+            }
         }
 
         function updateBlink() {
@@ -224,20 +366,18 @@
                 blinkTimer++;
                 if (blinkTimer > 3) {
                     blinkTimer = 0;
-                    if (blinkState === 1) blinkState = 2;
-                    else if (blinkState === 2) blinkState = 3;
-                    else if (blinkState === 3) blinkState = 0;
+                    blinkState = (blinkState + 1) % 4;
                 }
             }
         }
 
+        // Start Avatar Loop immediately
         draw();
 
 
-        /* --- APP LOGIC --- */
-        const recipe = {{ recipe | tojson | safe }};
-        const steps = {{ parsed_steps | tojson | safe }};
-        let currentStep = -1;
+        // --- APP LOGIC ---
+        let steps = [];
+        let currentStepIdx = -1;
         let timerInterval;
         let timeLeft;
         let isPaused = false;
@@ -248,7 +388,6 @@
             
             const u = new SpeechSynthesisUtterance(text);
             u.rate = 1.0;
-            
             const voices = window.speechSynthesis.getVoices();
             const preferred = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
             if(preferred) u.voice = preferred;
@@ -260,101 +399,156 @@
             window.speechSynthesis.speak(u);
         }
 
-        function initialize() {
-            if (recipe && steps && steps.length > 0) {
-                document.getElementById('recipeTitle').innerText = recipe.name;
-                document.getElementById('instructionText').innerText = "Hi! I'm ready to assist you.";
-                renderProgress(steps.length);
-                window.speechSynthesis.getVoices(); 
-                setTimeout(() => speak(`I have prepared the steps for ${recipe.name}. Shall we start?`), 800);
-            } else {
-                document.getElementById('recipeTitle').innerText = "No Recipe";
-                document.getElementById('instructionText').innerText = "No recipe data was provided. Please go back and select a recipe.";
-                document.getElementById('actionBtn').style.display = 'none';
-            }
-        }
-
-        function renderProgress(total) {
-            document.getElementById('progressBar').innerHTML = Array(total).fill('<div class="dot"></div>').join('');
-        }
-
-        function updateProgress(idx) {
-            document.querySelectorAll('.dot').forEach((d, i) => {
-                d.classList.toggle('active', i <= idx);
-            });
-        }
-
-        function startCooking() {
-            currentStep = 0;
+        // --- MAIN LOAD LOGIC (Updated for Demo Mode) ---
+        async function loadRecipeData() {
+            const id = new URLSearchParams(location.search).get('recipe_id');
             
-            const btn = document.getElementById('actionBtn');
-            btn.onclick = nextStep;
-            btn.innerText = "Next Step";
-            
-            showStep();
-        }
-
-        function showStep() {
-            if(currentStep >= steps.length) {
-                document.getElementById('instructionText').innerText = "Cooking Complete. Enjoy!";
-                document.getElementById('actionBtn').style.display = 'none';
-                speak("All done! Enjoy your meal.");
+            // 1. DEMO MODE (If no ID found)
+            if(!id) {
+                console.log("No Recipe ID. Loading Demo Mode.");
+                const demoData = {
+                    recipe: { name: "Demo: Truffle Pasta" },
+                    parsed_steps: [
+                        { step_number: 1, text: "Bring a large pot of salted water to a boil.", has_timer: false, timers: [] },
+                        { step_number: 2, text: "Add pasta and cook for 10 minutes until al dente.", has_timer: true, timers: [10] },
+                        { step_number: 3, text: "Reserve 1 cup of pasta water, then drain the pasta.", has_timer: false, timers: [] },
+                        { step_number: 4, text: "Mix pasta with truffle oil and parmesan, adding water to bind.", has_timer: false, timers: [] }
+                    ]
+                };
+                initSession(demoData);
                 return;
             }
-            
-            updateProgress(currentStep);
-            const s = steps[currentStep];
-            document.getElementById('instructionText').innerText = s.text;
-            speak(s.text);
 
-            if(s.has_timer && s.timers.length) {
-                startTimer(s.timers[0]);
-            } else {
-                document.getElementById('timerDisplay').classList.remove('active');
-                document.getElementById('secBtn').style.display = 'none';
+            // 2. FETCH REAL DATA
+            try {
+                const res = await fetch('/cook-with-ai', { 
+                    method: 'POST', 
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({recipe_id: id})
+                });
+                
+                const data = await res.json();
+                
+                if(data.success) {
+                    initSession(data);
+                } else {
+                    document.getElementById('instructionText').innerText = "Error: Could not find recipe.";
+                }
+            } catch(e) {
+                document.getElementById('instructionText').innerText = "Connection Error. Please try again.";
+                console.error(e);
             }
+        }
+
+        function initSession(data) {
+            steps = data.parsed_steps;
+            document.getElementById('stepLabel').innerText = data.recipe.name;
+            document.getElementById('instructionText').innerText = "I'm ready to help you cook!";
+            
+            // Setup Progress Bars
+            const bar = document.getElementById('progressBar');
+            bar.innerHTML = '';
+            steps.forEach(() => {
+                const d = document.createElement('div');
+                d.className = 'progress-dash';
+                bar.appendChild(d);
+            });
+
+            // Pre-load voices
+            window.speechSynthesis.getVoices();
+            setTimeout(() => speak(`I've loaded the steps for ${data.recipe.name}. Click Start when ready.`), 500);
+        }
+
+        function updateUI(idx) {
+            document.querySelectorAll('.progress-dash').forEach((d, i) => {
+                d.className = 'progress-dash';
+                if (i < idx) d.classList.add('completed');
+                if (i === idx) d.classList.add('active');
+            });
         }
 
         function nextStep() {
             clearInterval(timerInterval);
-            currentStep++;
-            showStep();
-        }
+            document.getElementById('timerDisplay').classList.remove('active');
+            document.getElementById('secBtn').style.display = 'none';
 
-        function startTimer(mins) {
-            timeLeft = mins * 60;
-            document.getElementById('timerDisplay').classList.add('active');
-            document.getElementById('secBtn').style.display = 'block';
-            document.getElementById('secBtn').onclick = toggleTimer;
-            updateTimerDisplay();
-            speak(`Starting timer for ${mins} minutes.`);
+            currentStepIdx++;
+
+            if (currentStepIdx >= steps.length) {
+                document.getElementById('stepLabel').innerText = "FINISHED";
+                document.getElementById('instructionText').innerText = "Bon Appétit!";
+                document.getElementById('actionBtn').style.display = 'none';
+                document.querySelectorAll('.progress-dash').forEach(d => d.classList.add('completed'));
+                speak("All done. Enjoy your meal!");
+                return;
+            }
+
+            updateUI(currentStepIdx);
+            const step = steps[currentStepIdx];
             
-            timerInterval = setInterval(() => {
-                if(!isPaused) {
-                    timeLeft--;
-                    updateTimerDisplay();
-                    if(timeLeft <= 0) {
-                        speak("Time is up.");
-                        nextStep();
-                    }
-                }
-            }, 1000);
+            document.getElementById('stepLabel').innerText = `STEP ${step.step_number}`;
+            document.getElementById('instructionText').innerText = step.text;
+            speak(step.text);
+
+            if (step.has_timer && step.timers.length > 0) {
+                setupTimer(step.timers[0]);
+            }
         }
 
-        function updateTimerDisplay() {
-            const m = Math.floor(timeLeft/60);
-            const s = timeLeft%60;
-            document.getElementById('timerDisplay').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+        function setupTimer(mins) {
+            timeLeft = mins * 60;
+            const display = document.getElementById('timerDisplay');
+            const secBtn = document.getElementById('secBtn');
+            
+            display.classList.add('active');
+            updateTimerText();
+            
+            secBtn.style.display = 'block';
+            secBtn.innerText = "Start Timer";
+            secBtn.onclick = toggleTimer;
         }
 
         function toggleTimer() {
-            isPaused = !isPaused;
-            document.getElementById('secBtn').innerText = isPaused ? "Resume" : "Pause";
+            const secBtn = document.getElementById('secBtn');
+            if (!timerInterval || isPaused) {
+                // Start/Resume
+                isPaused = false;
+                secBtn.innerText = "Pause";
+                timerInterval = setInterval(tick, 1000);
+            } else {
+                // Pause
+                isPaused = true;
+                secBtn.innerText = "Resume";
+                clearInterval(timerInterval);
+            }
         }
 
-        document.getElementById('actionBtn').onclick = startCooking;
+        function tick() {
+            timeLeft--;
+            updateTimerText();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                speak("Timer finished!");
+                document.getElementById('secBtn').style.display = 'none';
+            }
+        }
 
-        initialize();
+        function updateTimerText() {
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
+            document.getElementById('timerDisplay').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
+        // Initial Bindings
+        document.getElementById('actionBtn').onclick = () => {
+            document.getElementById('actionBtn').onclick = nextStep;
+            document.getElementById('actionBtn').innerText = "Next Step";
+            nextStep();
+        };
+
+        // Run
+        loadRecipeData();
+
     })();
     </script>
 </body>
