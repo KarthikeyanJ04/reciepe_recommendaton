@@ -1,0 +1,34 @@
+﻿python : C:\Users\karth\AppData\Local\Packages\PythonSof
+twareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\loc
+al-packages\Python313\site-packages\sklearn\base.py:442:
+ InconsistentVersionWarning: Trying to unpickle 
+estimator HashingVectorizer from version 1.6.1 when 
+using version 1.7.2. This might lead to breaking code 
+or invalid results. Use at your own risk. For more info 
+please refer to:
+At line:1 char:1
++ python test_biryani_search.py 2>&1 | Out-File 
+-Encoding utf8 search_r ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\k 
+   arth\...lease refer to::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+https://scikit-learn.org/stable/model_persistence.html#s
+ecurity-maintainability-limitations
+  warnings.warn(
+Chunk size: 50000, Num chunks: 45
+
+Searching for: chicken, tomato, onions, basmati rice, garlic
+
+Top 10 Results:
+0.7522 - Basmati Rice Pilaf With Peas(Matar Pulao; Serves 8)
+0.7397 - Reilly Rice
+0.7217 - Onion, Pepper And Tomatoes For White Rice
+0.7211 - Turkish Rice-A-Roni
+0.7200 - Vegetable Basmati Rice With Honey
+0.7113 - Black Bean, Rice, And Veggie Salad
+0.7106 - Spaghetti Salad
+0.7103 - Garden Rice Salad
+0.7081 - Fried Rice
+0.7078 - Basmati Rice With Mushrooms, Broccoli And Onion Recipe

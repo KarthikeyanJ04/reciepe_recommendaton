@@ -1,57 +1,60 @@
-import sqlite3
-import json
 import re
 
-DB_FILE = 'recipes.db'
+def normalize_instructions(instructions):
+    """Ensure instructions are a flat list of single steps."""
+    if isinstance(instructions, str):
+        instructions = [instructions]
+    
+    normalized = []
+    for item in instructions:
+        # Split by newlines first
+        lines = item.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check for numbered list pattern within the line (e.g. "1. Step one. 2. Step two.")
+            parts = re.split(r'\s+(?=\d+[\.\)])\s*', line)
+            
+            for part in parts:
+                part = part.strip()
+                # Remove leading numbers/bullets
+                part = re.sub(r'^\d+[\.\)\-]\s*', '', part)
+                if part:
+                    normalized.append(part)
+    return normalized
 
+def test():
+    print("Testing normalize_instructions...")
+    
+    # Case 1: Already clean
+    inp1 = ["Chop onions.", "Fry onions."]
+    out1 = normalize_instructions(inp1)
+    print(f"Case 1: {out1}")
+    assert len(out1) == 2
+    
+    # Case 2: Combined string
+    inp2 = ["1. Chop onions. 2. Fry onions."]
+    out2 = normalize_instructions(inp2)
+    print(f"Case 2: {out2}")
+    assert len(out2) == 2
+    assert out2[0] == "Chop onions."
+    assert out2[1] == "Fry onions."
+    
+    # Case 3: Newlines
+    inp3 = "Step 1\nStep 2"
+    out3 = normalize_instructions(inp3)
+    print(f"Case 3: {out3}")
+    assert len(out3) == 2
+    
+    # Case 4: Mixed
+    inp4 = ["1. Start.", "2. Middle. 3. End."]
+    out4 = normalize_instructions(inp4)
+    print(f"Case 4: {out4}")
+    assert len(out4) == 3
 
-def normalize_instruction(step):
-    if not isinstance(step, str):
-        return step
-    s = step.strip()
-    # If looks like JSON array
-    if s.startswith('[') and s.endswith(']'):
-        try:
-            parsed = json.loads(s)
-            if isinstance(parsed, list):
-                text = ' '.join([str(t).strip() for t in parsed if t])
-                text = re.sub(r"\s+([.,;:!?])", r"\1", text)
-                s = text
-        except Exception:
-            pass
-    try:
-        if '\\u' in s or '\\n' in s:
-            s = s.encode('utf-8').decode('unicode_escape')
-    except Exception:
-        pass
-    s = s.replace('â', '')
-    s = s.replace('\u00b0', '')
-    s = s.replace('Â', '')
-    s = re.sub(r'[\x00-\x1f\x7f]', '', s)
-    return s.strip()
-
-
-def sample_and_print(limit=5):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, instructions FROM recipes WHERE instructions IS NOT NULL LIMIT ?', (limit,))
-    rows = cur.fetchall()
-    conn.close()
-
-    for r in rows:
-        rid, name, instr = r
-        print('---')
-        print('id:', rid)
-        print('name:', name)
-        print('raw instructions field:')
-        print(instr[:1000])
-        parts = [p.strip() for p in instr.split('|') if p.strip()]
-        print('\nSplit into', len(parts), 'parts. Showing samples:')
-        for i, p in enumerate(parts[:5]):
-            print(f'  Part {i+1} RAW: {p[:300]}')
-            print('  Part normalized:')
-            print('    ', normalize_instruction(p)[:300])
-        print('\n')
+    print("✅ All tests passed!")
 
 if __name__ == "__main__":
-    sample_and_print(5)
+    test()
