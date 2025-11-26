@@ -405,6 +405,7 @@ def search():
     try:
         data = request.json
         query = data.get('query', '').strip()
+        dietary_preference = data.get('dietary_preference', 'all')
 
         if not query:
             return jsonify({'success': False, 'error': 'No query provided'})
@@ -413,6 +414,7 @@ def search():
             return jsonify({'success': False, 'error': 'Ollama not running. Start it with: ollama run mistral'}), 503
 
         print(f"[search] Searching for: {query}")
+        print(f"[search] Dietary preference: {dietary_preference}")
 
         # 1. Hybrid Search (TF-IDF + Embeddings)
         # This will return up to 20 recipes (10 from TF-IDF + 10 from embeddings)
@@ -431,8 +433,17 @@ def search():
             context_str += f"Instructions: {dish['instructions']}\n"
             context_str += "-" * 20 + "\n"
 
+        # Build dietary constraint for prompt
+        dietary_constraint = ""
+        if dietary_preference == 'vegetarian':
+            dietary_constraint = "IMPORTANT: Generate ONLY VEGETARIAN recipes. Do not include any meat, poultry, fish, or seafood."
+        elif dietary_preference == 'non-vegetarian':
+            dietary_constraint = "IMPORTANT: Generate ONLY NON-VEGETARIAN recipes that include meat, poultry, fish, or seafood."
+        
         # 2. Generate DB-Enhanced Recipes
         prompt = f"""You are a creative chef. A user wants recipes using ONLY these ingredients: "{query}" (plus basic pantry staples like salt, pepper, oil, water, sugar).
+
+{dietary_constraint}
 
 {context_str}
 
@@ -479,24 +490,36 @@ Do not include any text outside of the JSON array. The response should start wit
             
             normalized = []
             for item in instructions:
-                # Split by newlines first
+                if not item:
+                    continue
+                    
+                # First, split by newlines
                 lines = item.split('\n')
+                
                 for line in lines:
                     line = line.strip()
-                    if not line:
+                    if not line or line in ['', ' ']:
                         continue
                     
-                    # Check for numbered list pattern within the line (e.g. "1. Step one. 2. Step two.")
-                    # This regex looks for a digit followed by a dot/paren, but we need to be careful not to split "1.5 cups"
-                    # A safe heuristic is digit+dot+space
-                    parts = re.split(r'\s+(?=\d+[\.\)])\s*', line)
+                    # Split by numbered patterns like "1." or "1)" at the start of a sentence
+                    # This regex splits on patterns like "1. " or "2) " but NOT "1.5"
+                    parts = re.split(r'(?<=\.)\s+(?=\d+[\.\)]\s)', line)
+                    if len(parts) == 1:
+                        # Try another pattern: split before number at start
+                        parts = re.split(r'(?<!\d)(?=\d+[\.\)]\s+[A-Z])', line)
                     
                     for part in parts:
                         part = part.strip()
-                        # Remove leading numbers/bullets
+                        if not part:
+                            continue
+                        
+                        # Remove leading numbers/bullets (1. or 1) or -)
                         part = re.sub(r'^\d+[\.\)\-]\s*', '', part)
-                        if part:
+                        
+                        # Skip if it's just whitespace after cleaning
+                        if part and len(part) > 2:
                             normalized.append(part)
+            
             return normalized
 
         for i, recipe in enumerate(recipes):

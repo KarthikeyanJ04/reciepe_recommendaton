@@ -4,8 +4,8 @@
    UTILITIES
    ========================================== */
 
-function escapeHtml(str){
-  if(str == null) return '';
+function escapeHtml(str) {
+  if (str == null) return '';
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -23,7 +23,7 @@ const htmlElement = document.documentElement;
 const currentTheme = localStorage.getItem('theme') || 'light';
 htmlElement.setAttribute('data-theme', currentTheme);
 
-if(themeToggle){
+if (themeToggle) {
   themeToggle.addEventListener('click', () => {
     const current = htmlElement.getAttribute('data-theme');
     const newTheme = current === 'light' ? 'dark' : 'light';
@@ -35,8 +35,22 @@ if(themeToggle){
 const searchBtnEl = document.getElementById('searchBtn');
 const searchInputEl = document.getElementById('searchInput');
 
-if(searchBtnEl) searchBtnEl.addEventListener('click', searchRecipes);
-if(searchInputEl) searchInputEl.addEventListener('keypress', (e) => { if(e.key==='Enter') searchRecipes(); });
+if (searchBtnEl) searchBtnEl.addEventListener('click', searchRecipes);
+if (searchInputEl) searchInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchRecipes(); });
+
+// Dietary filter handling
+let selectedDiet = 'all';
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Remove active class from all buttons
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    // Add active class to clicked button
+    btn.classList.add('active');
+    // Update selected diet
+    selectedDiet = btn.getAttribute('data-diet');
+  });
+});
 
 /* ==========================================
    CORE LOGIC
@@ -44,43 +58,43 @@ if(searchInputEl) searchInputEl.addEventListener('keypress', (e) => { if(e.key==
 
 let recipeDataStore = {};
 
-async function searchRecipes(){
-  const query = (document.getElementById('searchInput')||{value:''}).value.trim();
-  if(!query) return;
+async function searchRecipes() {
+  const query = (document.getElementById('searchInput') || { value: '' }).value.trim();
+  if (!query) return;
 
   const searchBtn = document.getElementById('searchBtn');
   const loading = document.getElementById('loading');
   const results = document.getElementById('results');
 
-  if(searchBtn) searchBtn.disabled = true;
-  if(loading) loading.style.display = 'block';
-  if(results) results.innerHTML = '';
+  if (searchBtn) searchBtn.disabled = true;
+  if (loading) loading.style.display = 'block';
+  if (results) results.innerHTML = '';
 
   try {
     const response = await fetch('/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, dietary_preference: selectedDiet })
     });
     const data = await response.json();
-    
-    if(data.success){
+
+    if (data.success) {
       displayResults(data.recipes);
     } else {
       results.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">No recipes found.</div>`;
     }
-  } catch(e) {
+  } catch (e) {
     console.error(e);
     results.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">An error occurred.</div>`;
   } finally {
-    if(searchBtn) searchBtn.disabled = false;
-    if(loading) loading.style.display = 'none';
+    if (searchBtn) searchBtn.disabled = false;
+    if (loading) loading.style.display = 'none';
   }
 }
 
-function displayResults(recipes){
+function displayResults(recipes) {
   const results = document.getElementById('results');
-  if(!results) return;
+  if (!results) return;
 
   results.innerHTML = recipes.map(recipe => {
     // Store data for cooking assistant
