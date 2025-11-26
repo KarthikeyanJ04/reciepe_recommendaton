@@ -490,37 +490,46 @@ Do not include any text outside of the JSON array. The response should start wit
             
             normalized = []
             for item in instructions:
-                if not item:
+                if not item or not isinstance(item, str):
                     continue
-                    
-                # First, split by newlines
+                
+                # 1. Split by newlines first
                 lines = item.split('\n')
                 
                 for line in lines:
                     line = line.strip()
-                    if not line or line in ['', ' ']:
+                    if not line:
                         continue
                     
-                    # Split by numbered patterns like "1." or "1)" at the start of a sentence
-                    # This regex splits on patterns like "1. " or "2) " but NOT "1.5"
-                    parts = re.split(r'(?<=\.)\s+(?=\d+[\.\)]\s)', line)
-                    if len(parts) == 1:
-                        # Try another pattern: split before number at start
-                        parts = re.split(r'(?<!\d)(?=\d+[\.\)]\s+[A-Z])', line)
+                    # 2. Split by numbered patterns (e.g. "1. Step", "2) Step")
+                    # Split before number at start of line or in middle
+                    # (?<!\d) ensures we don't split 1.5
+                    # (?=\d+[\.\)]\s+) lookahead for "1. " or "1) "
+                    parts = re.split(r'(?<!\d)(?=\d+[\.\)]\s+)', line)
                     
                     for part in parts:
                         part = part.strip()
                         if not part:
                             continue
+                            
+                        # 3. Split by sentence boundaries
+                        # Look for punctuation [.!?] followed by whitespace and a Capital letter
+                        # This handles "Cook pasta. Drain it." -> "Cook pasta.", "Drain it."
+                        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', part)
                         
-                        # Remove leading numbers/bullets (1. or 1) or -)
-                        part = re.sub(r'^\d+[\.\)\-]\s*', '', part)
-                        
-                        # Skip if it's just whitespace after cleaning
-                        if part and len(part) > 2:
-                            normalized.append(part)
+                        for sentence in sentences:
+                            sentence = sentence.strip()
+                            
+                            # Remove leading numbers/bullets (e.g. "1.", "1)", "-")
+                            sentence = re.sub(r'^[\d\-\*\•]+[\.\)\:]?\s*', '', sentence)
+                            
+                            if len(sentence) > 3:
+                                # Ensure it ends with punctuation
+                                if not sentence[-1] in '.!?':
+                                    sentence += '.'
+                                normalized.append(sentence)
             
-            return normalized
+            return normalized if normalized else ["Follow the recipe instructions."]
 
         for i, recipe in enumerate(recipes):
             recipe['id'] = f"ai-{i}"

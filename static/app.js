@@ -110,7 +110,7 @@ function getRecipeCardHtml(recipe) {
   return `
     <div class="recipe-card" id="card-${recipe.id}">
       <div class="recipe-header">
-        <span class="ai-badge">AI Generated</span>
+        
         <h2 class="recipe-title">${escapeHtml(recipe.name)}</h2>
         <p class="recipe-desc">${escapeHtml(recipe.description)}</p>
       </div>
